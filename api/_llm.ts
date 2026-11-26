@@ -69,7 +69,10 @@ export async function callStructuredLLM<T>(opts: {
           }),
         }
       );
-      if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 200)}`);
+      }
       const json = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
       return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
     }
@@ -106,7 +109,10 @@ export async function callStructuredLLM<T>(opts: {
         ],
       }),
     });
-    if (!res.ok) throw new Error(`LLM HTTP ${res.status}`);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 200)}`);
+    }
     const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     return json?.choices?.[0]?.message?.content ?? '{}';
   };
