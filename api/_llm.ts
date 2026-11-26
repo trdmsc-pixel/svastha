@@ -23,6 +23,17 @@ const GROQ_VISION_CANDIDATES = [
   'meta-llama/llama-4-maverick-17b-128e-instruct',
 ];
 
+const META_TEXT_CANDIDATES = [
+  'Llama-4-Scout-17B-16E-Instruct-FP8',
+  'Llama-4-Maverick-17B-128E-Instruct-FP8',
+  'Llama-3.3-70B-Instruct',
+];
+
+const META_VISION_CANDIDATES = [
+  'Llama-4-Scout-17B-16E-Instruct-FP8',
+  'Llama-4-Maverick-17B-128E-Instruct-FP8',
+];
+
 async function fetchGroqModels(apiKey: string, useVision: boolean): Promise<string[]> {
   try {
     const res = await fetch('https://api.groq.com/openai/v1/models', {
@@ -57,28 +68,39 @@ export async function callStructuredLLM<T>(opts: {
   schema: z.ZodType<T>;
   useVision?: boolean;
 }): Promise<{ data: T; model: string }> {
-  const apiKey = (process.env.LLM_API_KEY ?? '').trim();
-  if (!apiKey) {
+  const rawKey = (process.env.LLM_API_KEY ?? '').trim();
+  if (!rawKey) {
     const err = new Error('LLM_API_KEY is not configured on the server.');
     (err as Error & { code?: string }).code = 'not_configured';
     throw err;
   }
+  const apiKey = rawKey.replace(/^LLM_(\d+)_(.+)$/, 'LLM|$1|$2');
 
   const explicitProvider = process.env.LLM_PROVIDER?.toLowerCase();
   const provider =
     explicitProvider ||
-    (apiKey.startsWith('gsk_') ? 'groq' : apiKey.startsWith('AIza') ? 'gemini' : 'openai');
+    (apiKey.startsWith('LLM|') || apiKey.startsWith('LLM_')
+      ? 'meta'
+      : apiKey.startsWith('gsk_')
+        ? 'groq'
+        : apiKey.startsWith('AIza')
+          ? 'gemini'
+          : 'openai');
 
   const envModel = opts.useVision ? process.env.LLM_VISION_MODEL : process.env.LLM_TEXT_MODEL;
   let candidateModels = envModel
     ? [envModel]
-    : provider === 'groq'
+    : provider === 'meta'
       ? opts.useVision
-        ? [...GROQ_VISION_CANDIDATES]
-        : [...GROQ_TEXT_CANDIDATES]
-      : provider === 'gemini'
-        ? ['gemini-2.5-flash']
-        : ['gpt-4o-mini'];
+        ? [...META_VISION_CANDIDATES]
+        : [...META_TEXT_CANDIDATES]
+      : provider === 'groq'
+        ? opts.useVision
+          ? [...GROQ_VISION_CANDIDATES]
+          : [...GROQ_TEXT_CANDIDATES]
+        : provider === 'gemini'
+          ? ['gemini-2.5-flash']
+          : ['gpt-4o-mini'];
 
   const invokeWithModel = async (
     model: string,
@@ -117,9 +139,11 @@ export async function callStructuredLLM<T>(opts: {
     }
 
     const endpoint =
-      provider === 'groq'
-        ? 'https://api.groq.com/openai/v1/chat/completions'
-        : 'https://api.openai.com/v1/chat/completions';
+      provider === 'meta'
+        ? 'https://api.llama.com/compat/v1/chat/completions'
+        : provider === 'groq'
+          ? 'https://api.groq.com/openai/v1/chat/completions'
+          : 'https://api.openai.com/v1/chat/completions';
 
     const userContent: unknown =
       opts.imagesBase64 && opts.imagesBase64.length > 0
