@@ -1,0 +1,50 @@
+{
+  "cdnBase": "https://cdn.jsdelivr.net/gh/trdmsc-pixel/svastha-assets@v1",
+  "foods": [
+    "foods/roti.webp",
+    "foods/rice-steamed.webp",
+    "foods/brown-rice.webp",
+    "foods/dal-tadka.webp",
+    "foods/rajma.webp",
+    "foods/chole.webp",
+    "foods/paneer-bhurji.webp",
+    "foods/palak-paneer.webp",
+    "foods/poha.webp",
+    "foods/idli-sambar.webp",
+    "foods/besan-chilla.webp",
+    "foods/curd.webp",
+    "foods/sprouts-chaat.webp",
+    "foods/makhana-roasted.webp",
+    "foods/quinoa-veggie-bowl.webp"
+  ],
+  "categories": [
+    "categories/all.png",
+    "categories/vegetarian.png",
+    "categories/vegan.png",
+    "categories/protein.png",
+    "categories/snacks.png",
+    "categories/breakfast.png",
+    "categories/drinks.png",
+    "categories/fasting.png",
+    "categories/heart.png",
+    "categories/liver.png",
+    "categories/sleep.png",
+    "categories/water.png",
+    "categories/exercise.png",
+    "categories/meds.png",
+    "categories/supplements.png",
+    "categories/report.png"
+  ],
+  "onboarding": [
+    "onboarding/hero-produce.webp",
+    "onboarding/hero-thali.webp",
+    "onboarding/hero-lab-calm.webp"
+  ],
+  "emptyStates": [
+    "empty-states/no-reports.png",
+    "empty-states/no-meals.png",
+    "empty-states/all-caught-up.png",
+    "empty-states/offline.png",
+    "empty-states/retest-due.png"
+  ]
+}

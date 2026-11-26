@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Svastha",
+    "slug": "swastha",
+    "scheme": "svastha",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F2ED",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.svastha.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Svastha uses the camera to scan meals and lab reports. Photos are processed in memory and never stored.",
+        "NSPhotoLibraryUsageDescription": "Svastha accesses photos you pick to scan a meal or lab report.",
+        "NSCalendarsUsageDescription": "Svastha creates a dedicated Svastha calendar to sync your routines, meals, medicines, and retest date.",
+        "NSFaceIDUsageDescription": "Unlock Svastha with Face ID to protect your personal health data."
+      }
+    },
+    "android": {
+      "package": "com.svastha.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F2ED"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_CALENDAR",
+        "WRITE_CALENDAR",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      "expo-local-authentication",
+      "expo-notifications",
+      "expo-calendar",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

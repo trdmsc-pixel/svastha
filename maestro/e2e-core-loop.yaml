@@ -1,0 +1,16 @@
+appId: com.svastha.app
+---
+- launchApp
+- assertVisible: "Today, 26 Nov"
+- tapOn: "Health"
+- assertVisible: "Report Summary"
+- assertVisible: "Liver"
+- assertVisible: "Heart & lipids"
+- tapOn: "Build / Refresh My Plan"
+- assertVisible: "Your Living Plan"
+- tapOn: "Scan"
+- assertVisible: "Log or Scan a Meal"
+- tapOn: "Confirm & Log Meal"
+- assertVisible: "Today’s Meals"
+- tapOn: "Me"
+- assertVisible: "Security & Privacy (DPDP Act 2023)"

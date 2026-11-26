@@ -1,0 +1,39 @@
+project_id = "swastha"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[auth]
+enabled = true
+site_url = "svastha://"
+additional_redirect_urls = ["https://swastha.vercel.app"]
+enable_signup = true
+
+[functions.parse-report]
+verify_jwt = true
+
+[functions.summarise-report]
+verify_jwt = true
+
+[functions.generate-plan]
+verify_jwt = true
+
+[functions.analyse-meal]
+verify_jwt = true
+
+[functions.adapt-plan]
+verify_jwt = false
+
+[functions.report-chat]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
