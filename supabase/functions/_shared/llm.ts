@@ -22,8 +22,6 @@ const GROQ_TEXT_CANDIDATES = [
 const GROQ_VISION_CANDIDATES = [
   'meta-llama/llama-4-scout-17b-16e-instruct',
   'meta-llama/llama-4-maverick-17b-128e-instruct',
-  'llama-3.2-90b-vision-preview',
-  'llama-3.2-11b-vision-preview',
 ];
 
 async function fetchGroqModels(apiKey: string, useVision: boolean): Promise<string[]> {
@@ -180,7 +178,8 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
       } catch (err) {
         lastErr = err;
         const st = (err as { status?: number }).status;
-        if (st === 404 || st === 429) continue;
+        const msg = String(err);
+        if (st === 404 || st === 429 || msg.includes('decommissioned') || msg.includes('model_not_found')) continue;
         throw err;
       }
     }
@@ -190,7 +189,8 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
   try {
     return await tryModels(candidateModels);
   } catch (err) {
-    if (provider === 'groq' && !envModel && (err as { status?: number }).status === 404) {
+    const st = (err as { status?: number }).status;
+    if (provider === 'groq' && !envModel && (st === 404 || st === 400)) {
       const discovered = await fetchGroqModels(apiKey, Boolean(opts.useVision));
       const fresh = discovered.filter((m) => !candidateModels.includes(m));
       if (fresh.length > 0) {
