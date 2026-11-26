@@ -12,9 +12,9 @@ export interface VercelResponseLike {
 }
 
 const GROQ_TEXT_CANDIDATES = [
+  'openai/gpt-oss-120b',
   'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
-  'openai/gpt-oss-120b',
   'meta-llama/llama-4-scout-17b-16e-instruct',
 ];
 
@@ -205,6 +205,13 @@ export async function callStructuredLLM<T>(opts: {
       if (fresh.length > 0) {
         return await tryModels(fresh);
       }
+      if (opts.useVision) {
+        const visionErr = new Error(
+          'Photo vision is not enabled on this Groq API key (only text models like openai/gpt-oss-120b are active). Use food search or switch LLM_API_KEY to a Gemini key for photo scanning.'
+        );
+        (visionErr as Error & { status?: number }).status = 422;
+        throw visionErr;
+      }
     }
     throw err;
   }
@@ -212,8 +219,12 @@ export async function callStructuredLLM<T>(opts: {
 
 export function handleLlmError(res: VercelResponseLike, err: unknown) {
   const code = (err as { code?: string })?.code;
+  const status = (err as { status?: number })?.status;
   if (code === 'not_configured') {
     return res.status(503).json({ code: 'not_configured', error: 'LLM_API_KEY is not configured.' });
+  }
+  if (status === 422) {
+    return res.status(422).json({ error: (err as Error).message });
   }
   return res.status(500).json({ error: String(err) });
 }

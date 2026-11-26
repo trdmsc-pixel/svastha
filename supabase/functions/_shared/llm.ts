@@ -13,9 +13,9 @@ export interface LlmCallOptions<T> {
 }
 
 const GROQ_TEXT_CANDIDATES = [
+  'openai/gpt-oss-120b',
   'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
-  'openai/gpt-oss-120b',
   'meta-llama/llama-4-scout-17b-16e-instruct',
 ];
 
@@ -195,6 +195,11 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
       const fresh = discovered.filter((m) => !candidateModels.includes(m));
       if (fresh.length > 0) {
         return await tryModels(fresh);
+      }
+      if (opts.useVision) {
+        throw new Error(
+          'Photo vision is not enabled on this Groq API key (only text models like openai/gpt-oss-120b are active). Use food search or switch LLM_API_KEY to a Gemini key for photo scanning.'
+        );
       }
     }
     throw err;
