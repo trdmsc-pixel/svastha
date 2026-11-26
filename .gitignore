@@ -8,4 +8,7 @@ web-build/
 *.log
 coverage/
 supabase/.temp/
+android/
+ios/
+*.apk
 .vercel

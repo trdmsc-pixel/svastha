@@ -1,14 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import Animated, {
+  FadeInUp,
+  FadeOut,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { useAuthStore } from '@/store/useAuthStore';
 import { switchUserData, useAppStore } from '@/store/useAppStore';
 import { AppLock } from '@/components/AppLock';
+import { Icon } from '@/components/Icon';
 import { ScreenBackground } from '@/components/ui';
 import { useReminderSchedule } from '@/hooks/useHealthData';
 import { applyReminderSchedule, configureNotificationChannels } from '@/lib/notifications';
@@ -69,8 +80,50 @@ function ReminderSync() {
   return null;
 }
 
+function AnimatedLaunchOverlay() {
+  const reduced = useReducedMotion();
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (reduced) return;
+    pulse.value = withRepeat(
+      withSequence(withTiming(1.08, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1,
+      true
+    );
+  }, [reduced, pulse]);
+
+  const ringStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulse.value }],
+  }));
+
+  return (
+    <Animated.View
+      exiting={reduced ? undefined : FadeOut.duration(320)}
+      style={[StyleSheet.absoluteFill, styles.splash]}
+    >
+      <ScreenBackground />
+      <Animated.View style={[styles.splashRing, ringStyle]}>
+        <View style={styles.splashBadge}>
+          <Icon name="zap" size={32} color={tokens.color.onAccent} strokeWidth={2.4} />
+        </View>
+      </Animated.View>
+      <Animated.View entering={reduced ? undefined : FadeInUp.duration(420)} style={{ alignItems: 'center' }}>
+        <Text style={styles.splashTitle}>Svastha</Text>
+        <Text style={styles.splashSub}>Your Lab Report, Decoded By AI</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 export default function RootLayout() {
-  const ready = useBootstrap();
+  const hydrated = useBootstrap();
+  const [minDelayDone, setMinDelayDone] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinDelayDone(true), 650);
+    return () => clearTimeout(t);
+  }, []);
+  const ready = hydrated && minDelayDone;
   useRouteGuard(ready);
 
   return (
@@ -91,12 +144,7 @@ export default function RootLayout() {
                 <Stack.Screen name="routine" />
                 <Stack.Screen name="report/chat" />
               </Stack>
-              {!ready && (
-                <View style={[StyleSheet.absoluteFill, styles.splash]}>
-                  <ScreenBackground />
-                  <ActivityIndicator color={tokens.color.accentText} size="large" />
-                </View>
-              )}
+              {!ready && <AnimatedLaunchOverlay />}
               {ready && <ReminderSync />}
               <AppLock />
             </View>
@@ -121,5 +169,33 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...(Platform.OS === 'web' ? { shadowColor: '#5A3A22', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.14, shadowRadius: 40 } : {}),
   },
-  splash: { alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.bg, zIndex: 50 },
+  splash: { alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.color.bg, zIndex: 50, gap: 18 },
+  splashRing: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: 'rgba(240, 154, 106, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  splashBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 26,
+    backgroundColor: tokens.color.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...tokens.shadow.glow,
+  },
+  splashTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: tokens.color.ink,
+    letterSpacing: -0.6,
+  },
+  splashSub: {
+    ...tokens.type.label,
+    color: tokens.color.inkMuted,
+    marginTop: 4,
+  },
 });
