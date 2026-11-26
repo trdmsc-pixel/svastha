@@ -95,7 +95,7 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
       } catch (err) {
         lastErr = err;
         const st = (err as { status?: number }).status;
-        if (st === 404 || st === 429) continue;
+        if (st === 404 || st === 429 || st === 503) continue;
         throw err;
       }
     }
@@ -106,7 +106,7 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
     return await tryModels(candidateModels);
   } catch (err) {
     const st = (err as { status?: number }).status;
-    if (!envModel && (st === 404 || st === 429)) {
+    if (!envModel && (st === 404 || st === 429 || st === 503)) {
       const discovered = await fetchGeminiFlashModels(apiKey);
       const fresh = discovered.filter((m) => !candidateModels.includes(m));
       if (fresh.length > 0) return await tryModels(fresh);
