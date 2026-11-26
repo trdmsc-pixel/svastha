@@ -1,29 +1,57 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Tabs, router } from 'expo-router';
 import { BlurView } from 'expo-blur';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { Icon, IconName } from '@/components/Icon';
 import { useScanLauncher } from '@/store/useScanLauncher';
 
 function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(focused ? 1.12 : 1);
+  const translateY = useSharedValue(focused ? -2 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      scale.value = focused ? 1.08 : 1;
+      translateY.value = 0;
+      return;
+    }
+    scale.value = withSpring(focused ? 1.12 : 1, { damping: 14, stiffness: 280 });
+    translateY.value = withSpring(focused ? -2 : 0, { damping: 14, stiffness: 280 });
+  }, [focused, reduced, scale, translateY]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateY: translateY.value }],
+  }));
+
   return (
-    <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+    <Animated.View style={[styles.tabItem, animStyle]}>
       <Icon name={name} size={22} color={focused ? tokens.color.white : '#A8A29B'} strokeWidth={focused ? 2.4 : 2} />
       {focused && <View style={styles.activeDot} />}
-    </View>
+    </Animated.View>
   );
 }
 
-/** Frosted charcoal floating tab bar; the glowing Scan button opens the phone camera immediately. */
+/** Frosted charcoal floating tab bar with smooth shift/fade tab transitions. */
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
+        animation: 'shift',
         tabBarStyle: styles.tabBar,
-        tabBarBackground: () => (Platform.OS === 'ios' ? <BlurView intensity={50} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 34, overflow: 'hidden' }]} /> : null),
+        tabBarBackground: () =>
+          Platform.OS === 'ios' ? (
+            <BlurView intensity={50} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 34, overflow: 'hidden' }]} />
+          ) : null,
       }}
     >
       <Tabs.Screen name="index" options={{ tabBarAccessibilityLabel: 'Today', tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} /> }} />
@@ -70,8 +98,17 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tabItem: { alignItems: 'center', justifyContent: 'center', minWidth: 48, minHeight: 44, borderRadius: 16 },
-  tabItemActive: {},
-  activeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: tokens.color.accent, marginTop: 4, shadowColor: tokens.color.accent, shadowOpacity: 0.9, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
+  activeDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: tokens.color.accent,
+    marginTop: 4,
+    shadowColor: tokens.color.accent,
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
   scanButton: {
     width: 60,
     height: 60,

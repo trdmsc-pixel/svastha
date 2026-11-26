@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import Animated, { FadeInRight, FadeOutLeft, useReducedMotion } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { useAppStore } from '@/store/useAppStore';
 import { useScanLauncher } from '@/store/useScanLauncher';
@@ -32,6 +33,9 @@ export default function ScanScreen() {
   const [query, setQuery] = useState('');
   const [consentOpen, setConsentOpen] = useState<null | (() => void)>(null);
   const results = useMemo(() => searchFoods(query), [query]);
+  const reducedMotion = useReducedMotion();
+  const stateEnter = reducedMotion ? undefined : FadeInRight.duration(260).springify().damping(20);
+  const stateExit = reducedMotion ? undefined : FadeOutLeft.duration(160);
 
   const withConsent = (purpose: 'meal_photo_processing' | 'report_processing', fn: () => void) => {
     if (s.hasConsent(purpose)) return fn();
@@ -118,30 +122,33 @@ export default function ScanScreen() {
         {note && <Banner tone="watch" icon="info" text={note} style={{ marginTop: 10 }} />}
 
         {phase === 'working' && (
-          <Card style={{ marginTop: 14 }}>
-            <Text style={ui.h3}>Analysing…</Text>
-            {STEPS.map((t, i) => (
-              <View key={t} style={[ui.row, { gap: 10, marginTop: 10, opacity: i <= step ? 1 : 0.4 }]}>
-                <Icon name={i < step ? 'check' : 'clock'} size={16} color={i < step ? tokens.color.ok : tokens.color.inkMuted} />
-                <Text style={ui.label}>{t}</Text>
-              </View>
-            ))}
-          </Card>
+          <Animated.View key="working" entering={stateEnter} exiting={stateExit}>
+            <Card style={{ marginTop: 14 }}>
+              <Text style={ui.h3}>Analysing…</Text>
+              {STEPS.map((t, i) => (
+                <View key={t} style={[ui.row, { gap: 10, marginTop: 10, opacity: i <= step ? 1 : 0.4 }]}>
+                  <Icon name={i < step ? 'check' : 'clock'} size={16} color={i < step ? tokens.color.ok : tokens.color.inkMuted} />
+                  <Text style={ui.label}>{t}</Text>
+                </View>
+              ))}
+            </Card>
+          </Animated.View>
         )}
 
         {mode === 'meal' && phase === 'idle' && (
-          <View style={{ marginTop: 14, gap: 10 }}>
+          <Animated.View key="meal-idle" entering={stateEnter} exiting={stateExit} style={{ marginTop: 14, gap: 10 }}>
             <Card onPress={() => withConsent('meal_photo_processing', () => analyseMeal('camera'))} accessibilityLabel="Take a meal photo">
               <View style={ui.row}><View style={styles.bigIcon}><Icon name="camera" size={26} color={tokens.color.onAccent} /></View>
-                <View style={{ flex: 1, marginLeft: 14 }}><Text style={ui.h3}>Snap your plate</Text><Text style={ui.muted}>Opens the camera · Gemini AI identifies each food & portion</Text></View></View>
+                <View style={{ flex: 1, marginLeft: 14 }}><Text style={ui.h3}>Snap your plate</Text><Text style={ui.muted}>Opens the camera · AI identifies each food & portion</Text></View></View>
             </Card>
             <Button label="Choose from gallery" icon="image" variant="secondary" onPress={() => withConsent('meal_photo_processing', () => analyseMeal('gallery'))} />
             <Button label="Search food instead" icon="search" variant="secondary" onPress={() => { setDraft([]); setPhase('review'); }} />
-          </View>
+          </Animated.View>
         )}
 
         {mode === 'meal' && phase === 'review' && (
-          <Card style={{ marginTop: 14 }}>
+          <Animated.View key="meal-review" entering={stateEnter} exiting={stateExit}>
+            <Card style={{ marginTop: 14 }}>
             <Text style={ui.h2}>Review meal</Text>
             <Text style={ui.muted}>Adjust portions — calories are computed from the IFCT 2017 food database, not by AI.</Text>
             {draft.map((d) => (
@@ -165,11 +172,12 @@ export default function ScanScreen() {
             <Text style={[ui.h3, { marginTop: 14 }]}>Total {total.kcal} kcal · P {total.protein_g}g · C {total.carbs_g}g · F {total.fat_g}g</Text>
             <Button label="Log meal" icon="check" onPress={save} disabled={draft.length === 0} style={{ marginTop: 12 }} />
             <Button label="Retake photo" icon="camera" variant="ghost" onPress={() => analyseMeal('camera')} />
-          </Card>
+            </Card>
+          </Animated.View>
         )}
 
         {mode === 'report' && phase !== 'working' && (
-          <View style={{ marginTop: 14, gap: 10 }}>
+          <Animated.View key="report-idle" entering={stateEnter} exiting={stateExit} style={{ marginTop: 14, gap: 10 }}>
             <Card>
               <Text style={ui.h2}>Import your lab report</Text>
               <Text style={ui.muted}>Works with Dr Lal PathLabs, SRL, Thyrocare, Metropolis and most Indian lab formats. AI reads the values; status, severity and red flags are computed in code from your lab’s own ranges.</Text>
@@ -178,7 +186,7 @@ export default function ScanScreen() {
             <Button label="Photograph report pages" icon="camera" variant="accent" onPress={() => withConsent('report_processing', () => importReport('camera'))} />
             <Button label="Choose page photos (up to 6)" icon="image" variant="secondary" onPress={() => withConsent('report_processing', () => importReport('photos'))} />
             <Button label="Try the sample report" icon="sparkles" variant="ghost" onPress={() => { const r = s.loadSampleReport(); s.buildPlanForReport(r.id); router.navigate('/(tabs)/health'); }} />
-          </View>
+          </Animated.View>
         )}
       </ScrollView>
 

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
+import Animated, { FadeInRight, FadeOutLeft, useReducedMotion } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { useAppStore } from '@/store/useAppStore';
 import { useInbox, useWeeklyAdherence } from '@/hooks/useHealthData';
@@ -48,6 +49,9 @@ export default function PlanScreen() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
+  const reducedMotion = useReducedMotion();
+  const secEnter = reducedMotion ? undefined : FadeInRight.duration(240).springify().damping(22);
+  const secExit = reducedMotion ? undefined : FadeOutLeft.duration(140);
 
   const focusAreas = useMemo<RecipeFocus[]>(() => {
     const latest = reports[0];
@@ -178,6 +182,7 @@ export default function PlanScreen() {
         </ScrollView>
 
         {/* RECIPES SECTION WITH AI TOGGLE */}
+        <Animated.View key={section} entering={secEnter} exiting={secExit}>
         {section === 'Recipes' && (
           <View>
             <Card style={styles.toggleCard}>
@@ -361,6 +366,7 @@ export default function PlanScreen() {
             ))}
           </Card>
         )}
+        </Animated.View>
 
         <Button label="Open Routine Builder" variant="secondary" onPress={() => router.push('/routine')} />
 

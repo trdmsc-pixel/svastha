@@ -3,7 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOutLeft, SlideInRight, useReducedMotion } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { Button } from '@/components/Button';
 import { getLocalOrCdnImage } from '@/lib/cdn';
@@ -92,7 +92,8 @@ export default function WelcomeScreen() {
       <SafeAreaView edges={['bottom']} style={styles.bottomArea}>
         <Animated.View
           key={idx}
-          entering={reducedMotion ? undefined : FadeInDown.duration(320)}
+          entering={reducedMotion ? undefined : SlideInRight.duration(320).springify().damping(22)}
+          exiting={reducedMotion ? undefined : FadeOutLeft.duration(180)}
           style={styles.textBlock}
         >
           <Text style={styles.title}>{slide.title}</Text>

@@ -13,16 +13,45 @@ export interface LlmCallOptions<T> {
 }
 
 const GROQ_TEXT_CANDIDATES = [
+  'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
   'openai/gpt-oss-120b',
-  'llama-3.3-70b-versatile',
   'meta-llama/llama-4-scout-17b-16e-instruct',
 ];
 
 const GROQ_VISION_CANDIDATES = [
   'meta-llama/llama-4-scout-17b-16e-instruct',
   'meta-llama/llama-4-maverick-17b-128e-instruct',
+  'llama-3.2-90b-vision-preview',
+  'llama-3.2-11b-vision-preview',
 ];
+
+async function fetchGroqModels(apiKey: string, useVision: boolean): Promise<string[]> {
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const ids = ((json.data ?? []) as Array<{ id: string }>).map((m) => m.id);
+    if (useVision) {
+      return ids.filter((id) => /vision|scout|maverick|llama-4|vl/i.test(id));
+    }
+    return ids.filter((id) => !/whisper|guard|tts|playai/i.test(id));
+  } catch {
+    return [];
+  }
+}
+
+function extractJsonString(raw: string): string {
+  const trimmed = raw.trim();
+  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  if (fence?.[1]) return fence[1].trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start !== -1 && end > start) return trimmed.slice(start, end + 1);
+  return trimmed;
+}
 
 export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ data: T; model: string }> {
   const apiKey = (Deno.env.get('LLM_API_KEY') ?? '').trim();
@@ -40,13 +69,17 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
     ? [envModel]
     : provider === 'groq'
       ? opts.useVision
-        ? GROQ_VISION_CANDIDATES
-        : GROQ_TEXT_CANDIDATES
+        ? [...GROQ_VISION_CANDIDATES]
+        : [...GROQ_TEXT_CANDIDATES]
       : provider === 'gemini'
         ? ['gemini-2.5-flash']
         : ['gpt-4o-mini'];
 
-  const invokeWithModel = async (model: string, retryHint?: string): Promise<string> => {
+  const invokeWithModel = async (
+    model: string,
+    retryHint?: string,
+    useJsonMode = true
+  ): Promise<string> => {
     const promptText = retryHint
       ? `${opts.userText}\n\nPrevious JSON failed schema validation: ${retryHint}. Return ONLY valid JSON.`
       : opts.userText;
@@ -93,21 +126,25 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
           ]
         : promptText;
 
+    const payload: Record<string, unknown> = {
+      model,
+      temperature: 0.2,
+      messages: [
+        { role: 'system', content: `${opts.systemPrompt}\nReturn ONLY valid JSON.` },
+        { role: 'user', content: userContent },
+      ],
+    };
+    if (useJsonMode) {
+      payload.response_format = { type: 'json_object' };
+    }
+
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: `${opts.systemPrompt}\nReturn ONLY valid JSON.` },
-          { role: 'user', content: userContent },
-        ],
-      }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const e = new Error(`LLM HTTP ${res.status}`);
@@ -118,23 +155,48 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
     return json?.choices?.[0]?.message?.content ?? '{}';
   };
 
-  let lastErr: unknown;
-  for (const model of candidateModels) {
-    try {
-      let raw = await invokeWithModel(model);
+  const tryModels = async (models: string[]) => {
+    let lastErr: unknown;
+    for (const model of models) {
       try {
-        const parsed = opts.schema.parse(JSON.parse(raw));
-        return { data: parsed, model };
-      } catch (zodErr) {
-        raw = await invokeWithModel(model, String(zodErr));
-        const parsed = opts.schema.parse(JSON.parse(raw));
-        return { data: parsed, model };
+        let raw: string;
+        try {
+          raw = await invokeWithModel(model, undefined, true);
+        } catch (err) {
+          if ((err as { status?: number }).status === 400) {
+            raw = await invokeWithModel(model, undefined, false);
+          } else {
+            throw err;
+          }
+        }
+        try {
+          const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
+          return { data: parsed, model };
+        } catch (zodErr) {
+          raw = await invokeWithModel(model, String(zodErr), false);
+          const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
+          return { data: parsed, model };
+        }
+      } catch (err) {
+        lastErr = err;
+        const st = (err as { status?: number }).status;
+        if (st === 404 || st === 429) continue;
+        throw err;
       }
-    } catch (err) {
-      lastErr = err;
-      if ((err as { status?: number }).status === 404) continue;
-      throw err;
     }
+    throw lastErr;
+  };
+
+  try {
+    return await tryModels(candidateModels);
+  } catch (err) {
+    if (provider === 'groq' && !envModel && (err as { status?: number }).status === 404) {
+      const discovered = await fetchGroqModels(apiKey, Boolean(opts.useVision));
+      const fresh = discovered.filter((m) => !candidateModels.includes(m));
+      if (fresh.length > 0) {
+        return await tryModels(fresh);
+      }
+    }
+    throw err;
   }
-  throw lastErr;
 }
