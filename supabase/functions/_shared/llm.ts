@@ -12,7 +12,22 @@ export interface LlmCallOptions<T> {
   useVision?: boolean;
 }
 
-const GEMINI_CANDIDATES = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+const GEMINI_CANDIDATES = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+
+async function fetchGeminiFlashModels(apiKey: string): Promise<string[]> {
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return ((json.models ?? []) as Array<{ name: string; supportedGenerationMethods?: string[] }>)
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent') && /flash/i.test(m.name))
+      .map((m) => m.name.replace(/^models\//, ''))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
 
 function extractJsonString(raw: string): string {
   const trimmed = raw.trim();
@@ -64,24 +79,38 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
     return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
   };
 
-  let lastErr: unknown;
-  for (const model of candidateModels) {
-    try {
-      let raw = await invokeWithModel(model);
+  const tryModels = async (models: string[]) => {
+    let lastErr: unknown;
+    for (const model of models) {
       try {
-        const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
-        return { data: parsed, model };
-      } catch (zodErr) {
-        raw = await invokeWithModel(model, String(zodErr));
-        const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
-        return { data: parsed, model };
+        let raw = await invokeWithModel(model);
+        try {
+          const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
+          return { data: parsed, model };
+        } catch (zodErr) {
+          raw = await invokeWithModel(model, String(zodErr));
+          const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
+          return { data: parsed, model };
+        }
+      } catch (err) {
+        lastErr = err;
+        const st = (err as { status?: number }).status;
+        if (st === 404 || st === 429) continue;
+        throw err;
       }
-    } catch (err) {
-      lastErr = err;
-      const st = (err as { status?: number }).status;
-      if (st === 404 || st === 429) continue;
-      throw err;
     }
+    throw lastErr;
+  };
+
+  try {
+    return await tryModels(candidateModels);
+  } catch (err) {
+    const st = (err as { status?: number }).status;
+    if (!envModel && (st === 404 || st === 429)) {
+      const discovered = await fetchGeminiFlashModels(apiKey);
+      const fresh = discovered.filter((m) => !candidateModels.includes(m));
+      if (fresh.length > 0) return await tryModels(fresh);
+    }
+    throw err;
   }
-  throw lastErr;
 }
