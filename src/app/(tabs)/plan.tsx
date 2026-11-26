@@ -1,19 +1,31 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { tokens } from '@/theme/tokens';
 import { useAppStore } from '@/store/useAppStore';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { DisclaimerFooter } from '@/components/DisclaimerFooter';
+import { getLocalOrCdnImage } from '@/lib/cdn';
 
 type PlanSection = 'Meals' | 'Sleep' | 'Exercise' | 'Supplements' | 'Medicines' | 'Measures';
 const SECTIONS: PlanSection[] = ['Meals', 'Sleep', 'Exercise', 'Supplements', 'Medicines', 'Measures'];
 
+const CATEGORIES = [
+  { id: 'all', label: 'All', icon: 'apps' as const, bg: '#EFEAE3' },
+  { id: 'vegan', label: 'Vegan', icon: 'leaf' as const, bg: '#E7F3EA' },
+  { id: 'protein', label: 'Protein', icon: 'flash' as const, bg: '#FDE8DC' },
+  { id: 'snacks', label: 'Snacks', icon: 'cafe' as const, bg: '#FFF4DC' },
+];
+
 export default function PlanScreen() {
   const { activePlan } = useAppStore();
   const [section, setSection] = useState<PlanSection>('Meals');
+  const [selectedCat, setSelectedCat] = useState('all');
+  const [search, setSearch] = useState('');
+  const [starred, setStarred] = useState(true);
 
   if (!activePlan) {
     return (
@@ -30,11 +42,107 @@ export default function PlanScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Your Living Plan</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Top Search + Notification Bell (reference right screen) */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={18} color={tokens.color.inkMuted} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search recipes & plan"
+              placeholderTextColor={tokens.color.inkMuted}
+              style={styles.searchInput}
+              accessibilityLabel="Search recipes and plan"
+            />
+          </View>
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            style={styles.bellBtn}
+          >
+            <Ionicons name="notifications-outline" size={20} color={tokens.color.ink} />
+          </Pressable>
+        </View>
 
-        {/* Header summary */}
-        <Card style={styles.mb}>
+        {/* Category Icon Tiles */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll}>
+          {CATEGORIES.map((cat) => {
+            const active = selectedCat === cat.id;
+            return (
+              <Pressable
+                key={cat.id}
+                onPress={() => setSelectedCat(cat.id)}
+                style={styles.catItem}
+                accessibilityRole="button"
+                accessibilityLabel={cat.label}
+              >
+                <View style={[styles.catTile, { backgroundColor: cat.bg }, active && styles.catTileActive]}>
+                  <Ionicons name={cat.icon} size={24} color={tokens.color.ink} />
+                </View>
+                <Text style={[styles.catLabel, active && styles.catLabelActive]}>{cat.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Trending Recipes Hero Card (reference right screen) */}
+        <View style={styles.trendingHeader}>
+          <View style={styles.trendingTitleRow}>
+            <Text style={styles.sectionHeading}>Recommended Meals</Text>
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>8</Text>
+            </View>
+          </View>
+          <Text style={styles.seeAll}>See All</Text>
+        </View>
+
+        <Card delay={60} style={styles.recipeCard}>
+          <View style={styles.recipeTop}>
+            <View>
+              <Text style={styles.recipeTitle}>Quinoa Veggie Bowl</Text>
+              <View style={styles.timeRow}>
+                <Ionicons name="time" size={14} color={tokens.color.accentText} />
+                <Text style={styles.timeText}>20 min · Liver & Lipid Friendly</Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => setStarred(!starred)}
+              accessibilityRole="button"
+              accessibilityLabel="Bookmark recipe"
+              hitSlop={8}
+            >
+              <Ionicons
+                name={starred ? 'star' : 'star-outline'}
+                size={22}
+                color={tokens.color.ink}
+              />
+            </Pressable>
+          </View>
+
+          <Image
+            source={getLocalOrCdnImage('recipes/quinoa-veggie-bowl.webp')}
+            style={styles.bowlImage}
+            resizeMode="contain"
+          />
+
+          <View style={styles.recipeFooter}>
+            <View style={styles.difficultyRow}>
+              <Text style={styles.diffLabel}>Easy</Text>
+              {[1, 2, 3, 4, 5].map((bar) => (
+                <View
+                  key={bar}
+                  style={[styles.diffPill, bar <= 2 ? styles.diffPillActive : styles.diffPillMuted]}
+                />
+              ))}
+            </View>
+            <Text style={styles.recipeKcal}>420 kcal</Text>
+          </View>
+        </Card>
+
+        {/* Living Plan Header Summary */}
+        <Card delay={120} style={styles.mb}>
           <Text style={styles.accentLabel}>
             Target retest: {activePlan.retest_date} ({activePlan.retest_weeks} weeks)
           </Text>
@@ -46,7 +154,7 @@ export default function PlanScreen() {
           </Text>
         </Card>
 
-        {/* Horizontal section chips */}
+        {/* Plan Section Switcher */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
           {SECTIONS.map((s) => (
             <Pressable
@@ -60,7 +168,7 @@ export default function PlanScreen() {
         </ScrollView>
 
         {section === 'Meals' && (
-          <Card style={styles.mb}>
+          <Card delay={160} style={styles.mb}>
             <Text style={styles.h2}>Daily Nutrition Targets</Text>
             <Text style={styles.body}>
               {activePlan.daily_targets.kcal} kcal · Protein {activePlan.daily_targets.protein_g} g ·
@@ -74,7 +182,7 @@ export default function PlanScreen() {
         )}
 
         {section === 'Sleep' && (
-          <Card style={styles.mb}>
+          <Card delay={160} style={styles.mb}>
             <Text style={styles.h2}>Sleep Schedule</Text>
             <Text style={styles.body}>
               Bedtime {activePlan.sleep.bed} · Wake {activePlan.sleep.wake} · Caffeine cut-off{' '}
@@ -87,7 +195,7 @@ export default function PlanScreen() {
         )}
 
         {section === 'Exercise' && (
-          <Card style={styles.mb}>
+          <Card delay={160} style={styles.mb}>
             <Text style={styles.h2}>Weekly Movement</Text>
             {activePlan.exercise_weekly.map((ex) => (
               <View key={ex.day} style={styles.exRow}>
@@ -99,7 +207,7 @@ export default function PlanScreen() {
         )}
 
         {section === 'Supplements' && (
-          <Card style={styles.mb}>
+          <Card delay={160} style={styles.mb}>
             <Text style={styles.h2}>Options to Discuss with Your Doctor</Text>
             <Text style={styles.caption}>
               Hepatotoxic-risk supplements (niacin, kava, green-tea extract, high-dose vitamin A) are automatically excluded because liver enzymes are flagged.
@@ -117,7 +225,7 @@ export default function PlanScreen() {
         )}
 
         {section === 'Medicines' && (
-          <Card style={styles.mb}>
+          <Card delay={160} style={styles.mb}>
             <Text style={styles.h2}>Doctor Talking Points</Text>
             <Text style={styles.caption}>
               Svastha never prescribes or adjusts doses. Use these points at your next visit:
@@ -129,7 +237,7 @@ export default function PlanScreen() {
         )}
 
         {section === 'Measures' && (
-          <Card style={styles.mb}>
+          <Card delay={160} style={styles.mb}>
             <Text style={styles.h2}>Daily Measures</Text>
             {activePlan.measures.map((m, i) => (
               <Text key={i} style={styles.bullet}>• {m}</Text>
@@ -147,8 +255,77 @@ export default function PlanScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: tokens.color.bg },
-  scroll: { padding: tokens.space.lg, paddingBottom: 110 },
+  scroll: { padding: tokens.space.lg, paddingBottom: 112 },
   title: { ...tokens.type.h1, color: tokens.color.ink, marginBottom: tokens.space.md },
+  searchRow: { flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: tokens.space.md },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: tokens.color.surface,
+    borderRadius: tokens.radius.chip,
+    paddingHorizontal: 16,
+    height: 46,
+    gap: 8,
+    ...tokens.shadow.card,
+  },
+  searchInput: { flex: 1, ...tokens.type.body, color: tokens.color.ink },
+  bellBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: tokens.color.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...tokens.shadow.card,
+  },
+  catScroll: { marginBottom: tokens.space.lg },
+  catItem: { alignItems: 'center', marginRight: 14 },
+  catTile: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...tokens.shadow.card,
+  },
+  catTileActive: {
+    borderWidth: 2,
+    borderColor: tokens.color.accent,
+  },
+  catLabel: { ...tokens.type.caption, color: tokens.color.inkMuted, marginTop: 6, fontWeight: '500' },
+  catLabelActive: { color: tokens.color.ink, fontWeight: '700' },
+  trendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: tokens.space.sm,
+  },
+  trendingTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionHeading: { ...tokens.type.h2, color: tokens.color.ink },
+  countBadge: {
+    backgroundColor: tokens.color.accent,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countBadgeText: { fontSize: 12, fontWeight: '700', color: tokens.color.onAccent },
+  seeAll: { ...tokens.type.label, color: tokens.color.inkMuted },
+  recipeCard: { marginBottom: tokens.space.lg, padding: tokens.space.lg },
+  recipeTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  recipeTitle: { fontSize: 18, fontWeight: '700', color: tokens.color.ink },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  timeText: { ...tokens.type.caption, color: tokens.color.inkMuted },
+  bowlImage: { width: '100%', height: 210, marginVertical: tokens.space.sm },
+  recipeFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
+  difficultyRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  diffLabel: { ...tokens.type.caption, color: tokens.color.inkMuted, marginRight: 4 },
+  diffPill: { width: 8, height: 18, borderRadius: 4 },
+  diffPillActive: { backgroundColor: tokens.color.accent },
+  diffPillMuted: { backgroundColor: tokens.color.surfaceMuted },
+  recipeKcal: { fontSize: 22, fontWeight: '700', color: tokens.color.ink, fontVariant: ['tabular-nums'] },
   h2: { ...tokens.type.h2, color: tokens.color.ink, marginBottom: tokens.space.xs },
   body: { ...tokens.type.body, color: tokens.color.ink, marginBottom: 4 },
   caption: { ...tokens.type.caption, color: tokens.color.inkMuted },

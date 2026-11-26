@@ -13,15 +13,15 @@ export function MacroRow({ proteinG, carbsG, fatG }: MacroRowProps) {
     <View style={styles.row}>
       <View style={styles.col}>
         <Text style={styles.label}>Protein</Text>
-        <Text style={styles.val}>{proteinG} g</Text>
+        <Text style={styles.val}>{Math.round(proteinG)}g</Text>
       </View>
       <View style={styles.col}>
         <Text style={styles.label}>Carbs</Text>
-        <Text style={styles.val}>{carbsG} g</Text>
+        <Text style={styles.val}>{Math.round(carbsG)}g</Text>
       </View>
       <View style={styles.col}>
         <Text style={styles.label}>Fat</Text>
-        <Text style={styles.val}>{fatG} g</Text>
+        <Text style={styles.val}>{Math.round(fatG)}g</Text>
       </View>
     </View>
   );
@@ -30,21 +30,25 @@ export function MacroRow({ proteinG, carbsG, fatG }: MacroRowProps) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginTop: tokens.space.sm,
-    gap: tokens.space.md,
+    gap: tokens.space.xl,
   },
   col: {
-    flex: 1,
+    minWidth: 48,
   },
   label: {
-    ...tokens.type.caption,
+    fontSize: 12,
+    lineHeight: 16,
     color: tokens.color.inkMuted,
+    fontWeight: '500',
   },
   val: {
-    ...tokens.type.label,
+    fontSize: 14,
+    lineHeight: 18,
     color: tokens.color.ink,
-    fontWeight: '600',
+    fontWeight: '700',
     fontVariant: ['tabular-nums'],
+    marginTop: 1,
   },
 });

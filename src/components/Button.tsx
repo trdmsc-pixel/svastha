@@ -1,5 +1,11 @@
 import React from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, ViewStyle } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 
 interface ButtonProps {
@@ -11,6 +17,8 @@ interface ButtonProps {
   style?: StyleProp<ViewStyle>;
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function Button({
   label,
   onPress,
@@ -19,22 +27,39 @@ export function Button({
   accessibilityHint,
   style,
 }: ButtonProps) {
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(1);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       disabled={disabled}
+      onPressIn={() => {
+        if (!reducedMotion && !disabled) {
+          scale.value = withSpring(0.97, { damping: 16, stiffness: 340 });
+        }
+      }}
+      onPressOut={() => {
+        if (!reducedMotion) {
+          scale.value = withSpring(1, { damping: 16, stiffness: 340 });
+        }
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [
+      style={[
         styles.base,
         variant === 'primary' && styles.primary,
         variant === 'secondary' && styles.secondary,
         variant === 'accent' && styles.accent,
         variant === 'danger' && styles.danger,
-        pressed && styles.pressed,
         disabled && styles.disabled,
+        animStyle,
         style,
       ]}
     >
@@ -49,13 +74,13 @@ export function Button({
       >
         {label}
       </Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: Math.max(tokens.a11y.minTouchTarget, 48),
+    minHeight: Math.max(tokens.a11y.minTouchTarget, 52),
     borderRadius: tokens.radius.button,
     paddingHorizontal: tokens.space.xl,
     paddingVertical: tokens.space.md,
@@ -76,9 +101,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: tokens.color.risk,
   },
-  pressed: {
-    opacity: 0.85,
-  },
   disabled: {
     opacity: 0.45,
   },
@@ -93,7 +115,6 @@ const styles = StyleSheet.create({
     color: tokens.color.ink,
   },
   labelOnAccent: {
-    // Charcoal on peach (6.43:1) — never white on peach (WCAG AA)
     color: tokens.color.onAccent,
   },
   labelDanger: {

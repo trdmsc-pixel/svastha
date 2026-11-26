@@ -1,26 +1,30 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { tokens } from '@/theme/tokens';
 import { useAppStore } from '@/store/useAppStore';
 import { Card } from '@/components/Card';
 import { SegmentArc } from '@/components/SegmentArc';
 import { MacroRow } from '@/components/MacroRow';
+import { getLocalOrCdnImage } from '@/lib/cdn';
 
 export default function TodayScreen() {
-  const { activePlan, mealsToday, waterMlToday, tasksToday, addWater, toggleTaskDone } =
+  const { activePlan, mealsToday, waterMlToday, tasksToday, addWater, toggleTaskDone, logQuickMeal } =
     useAppStore();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   const eatenKcal = mealsToday.reduce((sum, m) => sum + m.total.kcal, 0);
   const goalKcal = activePlan?.daily_targets.kcal ?? 2000;
   const waterGoal = activePlan?.daily_targets.water_ml ?? 2500;
   const glassesFilled = Math.round(waterMlToday / 250);
   const glassesTarget = Math.round(waterGoal / 250);
+  const waterPct = Math.min(100, Math.round((waterMlToday / waterGoal) * 100));
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Top bar */}
         <View style={styles.topBar}>
           <Pressable
@@ -29,45 +33,98 @@ export default function TodayScreen() {
             accessibilityLabel="Open Calendar"
             style={styles.iconBtn}
           >
-            <Text style={styles.iconText}>📅</Text>
+            <Ionicons name="calendar-outline" size={20} color={tokens.color.ink} />
           </Pressable>
-          <Text style={styles.headerDate}>Today, 26 Nov</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Dashboard</Text>
+          </View>
           <Pressable
             onPress={() => router.push('/notifications')}
             accessibilityRole="button"
             accessibilityLabel="Notifications, 2 new"
             style={styles.iconBtn}
           >
-            <Text style={styles.iconText}>🔔</Text>
+            <Ionicons name="notifications-outline" size={20} color={tokens.color.ink} />
+            <View style={styles.unreadDot} />
           </Pressable>
         </View>
 
-        {/* Calorie Arc */}
-        <Card style={styles.arcCard}>
+        {/* Calorie Arc + "+" Add Bar */}
+        <View style={styles.heroSection}>
           <SegmentArc
             eatenKcal={eatenKcal}
             goalKcal={goalKcal}
-            dateLabel="Daily Calories"
+            dateLabel="Today, 26 Nov"
             onPress={() => router.push('/(tabs)/plan')}
           />
           <Pressable
-            onPress={() => router.push('/(tabs)/scan')}
+            onPress={() => setQuickAddOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="Quick add meal, water, or routine task"
             style={styles.addBar}
           >
-            <Text style={styles.addBarText}>+  Scan meal · Search food · Add water</Text>
+            <Ionicons name="add" size={24} color={tokens.color.ink} />
           </Pressable>
-        </Card>
+        </View>
 
-        {/* Water Row */}
-        <Card style={styles.sectionCard}>
+        {/* Meal Cards (reference left screen style) */}
+        {[...mealsToday].reverse().map((meal, index) => {
+          const pct = Math.round((meal.total.kcal / goalKcal) * 100);
+          const timeLabel = new Date(meal.eaten_at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const primaryImg = meal.items[0]?.image_key;
+          return (
+            <Card key={meal.id} delay={index * 70} style={styles.mealCard}>
+              <View style={styles.mealTopRow}>
+                <Image
+                  source={getLocalOrCdnImage(primaryImg)}
+                  style={styles.mealThumb}
+                  resizeMode="cover"
+                />
+                <View style={styles.mealInfo}>
+                  <Text style={styles.mealSlot}>
+                    {meal.slot.charAt(0).toUpperCase() + meal.slot.slice(1)}
+                  </Text>
+                  <Text style={styles.mealTime}>{timeLabel}</Text>
+                </View>
+                <View style={styles.kcalCol}>
+                  <Text style={styles.mealKcal}>{meal.total.kcal} kcal</Text>
+                  <Text style={styles.pctText}>{pct}% of goal</Text>
+                </View>
+              </View>
+
+              <View style={styles.mealBottomRow}>
+                <MacroRow
+                  proteinG={meal.total.protein_g}
+                  carbsG={meal.total.carbs_g}
+                  fatG={meal.total.fat_g}
+                />
+                <Pressable
+                  onPress={() => router.push('/(tabs)/scan')}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${meal.slot}`}
+                  style={styles.editBtn}
+                >
+                  <Ionicons name="pencil" size={16} color={tokens.color.ink} />
+                </Pressable>
+              </View>
+            </Card>
+          );
+        })}
+
+        {/* Hydration Row */}
+        <Card delay={140} style={styles.sectionCard}>
           <View style={styles.rowBetween}>
-            <View>
+            <View style={{ flex: 1, marginRight: 12 }}>
               <Text style={styles.sectionTitle}>Hydration</Text>
               <Text style={styles.mutedText}>
-                {glassesFilled} / {glassesTarget} glasses ({waterMlToday} ml / {waterGoal} ml)
+                {glassesFilled} / {glassesTarget} glasses · {waterMlToday} ml
               </Text>
+              <View style={styles.waterTrack}>
+                <View style={[styles.waterFill, { width: `${waterPct}%` }]} />
+              </View>
             </View>
             <Pressable
               onPress={() => addWater(250)}
@@ -80,38 +137,9 @@ export default function TodayScreen() {
           </View>
         </Card>
 
-        {/* Meals */}
-        <Text style={styles.groupHeading}>Today’s Meals</Text>
-        {mealsToday.map((meal) => {
-          const pct = Math.round((meal.total.kcal / goalKcal) * 100);
-          return (
-            <Card key={meal.id} style={styles.sectionCard}>
-              <View style={styles.rowBetween}>
-                <View>
-                  <Text style={styles.mealSlot}>
-                    {meal.slot.charAt(0).toUpperCase() + meal.slot.slice(1)}
-                  </Text>
-                  <Text style={styles.mealName}>
-                    {meal.items.map((i) => i.name).join(', ')}
-                  </Text>
-                </View>
-                <View style={styles.kcalCol}>
-                  <Text style={styles.mealKcal}>{meal.total.kcal} kcal</Text>
-                  <Text style={styles.pctText}>{pct}% of goal</Text>
-                </View>
-              </View>
-              <MacroRow
-                proteinG={meal.total.protein_g}
-                carbsG={meal.total.carbs_g}
-                fatG={meal.total.fat_g}
-              />
-            </Card>
-          );
-        })}
-
         {/* Today's Plan Tasks */}
         <Text style={styles.groupHeading}>Today’s Plan Tasks</Text>
-        <Card style={styles.sectionCard}>
+        <Card delay={200} style={styles.sectionCard}>
           {tasksToday.map((task) => {
             const done = task.status_today === 'done';
             return (
@@ -124,7 +152,7 @@ export default function TodayScreen() {
                 style={styles.taskRow}
               >
                 <View style={[styles.checkbox, done && styles.checkboxDone]}>
-                  {done && <Text style={styles.checkGlyph}>✓</Text>}
+                  {done && <Ionicons name="checkmark" size={15} color={tokens.color.white} />}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.taskTitle, done && styles.taskDone]}>{task.title}</Text>
@@ -137,28 +165,72 @@ export default function TodayScreen() {
 
         {/* Retest Countdown */}
         {activePlan && (
-          <Card style={styles.retestCard}>
-            <Text style={styles.retestTitle}>
-              Next retest target: {activePlan.retest_date} ({activePlan.retest_weeks} weeks)
-            </Text>
-            <Text style={styles.mutedText}>
-              Targets: {activePlan.targets.map((t) => `${t.biomarker_code} ${t.target}`).join(' · ')}
-            </Text>
+          <Card delay={250} style={styles.retestCard} onPress={() => router.push('/(tabs)/health')}>
+            <View style={styles.rowBetween}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.retestTitle}>
+                  Next retest: {activePlan.retest_date} ({activePlan.retest_weeks} weeks)
+                </Text>
+                <Text style={styles.mutedText}>
+                  {activePlan.targets.map((t) => `${t.biomarker_code} ${t.target}`).join(' · ')}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={tokens.color.accentText} />
+            </View>
           </Card>
         )}
       </ScrollView>
+
+      {/* Quick-Add Sheet */}
+      <Modal visible={quickAddOpen} transparent animationType="fade" onRequestClose={() => setQuickAddOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setQuickAddOpen(false)}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Quick Add</Text>
+            <Pressable
+              style={styles.sheetOption}
+              onPress={() => {
+                setQuickAddOpen(false);
+                router.push('/(tabs)/scan');
+              }}
+            >
+              <Ionicons name="camera-outline" size={20} color={tokens.color.ink} />
+              <Text style={styles.sheetOptionText}>Scan meal or lab report</Text>
+            </Pressable>
+            <Pressable
+              style={styles.sheetOption}
+              onPress={() => {
+                logQuickMeal('ifct_makhana', 25, 'snack');
+                setQuickAddOpen(false);
+              }}
+            >
+              <Ionicons name="nutrition-outline" size={20} color={tokens.color.ink} />
+              <Text style={styles.sheetOptionText}>Log Roasted Makhana (1 katori · 87 kcal)</Text>
+            </Pressable>
+            <Pressable
+              style={styles.sheetOption}
+              onPress={() => {
+                addWater(250);
+                setQuickAddOpen(false);
+              }}
+            >
+              <Ionicons name="water-outline" size={20} color={tokens.color.ink} />
+              <Text style={styles.sheetOptionText}>Add 250 ml water</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: tokens.color.bg },
-  scroll: { padding: tokens.space.lg, paddingBottom: 110 },
+  scroll: { padding: tokens.space.lg, paddingBottom: 112 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: tokens.space.md,
+    marginBottom: tokens.space.sm,
   },
   iconBtn: {
     width: 44,
@@ -167,24 +239,106 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...tokens.shadow.card,
   },
-  iconText: { fontSize: 18 },
-  headerDate: { ...tokens.type.h2, color: tokens.color.ink },
-  arcCard: { marginBottom: tokens.space.lg, alignItems: 'center' },
+  unreadDot: {
+    position: 'absolute',
+    top: 10,
+    right: 11,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: tokens.color.accent,
+    borderWidth: 1.5,
+    borderColor: tokens.color.surface,
+  },
+  headerCenter: { alignItems: 'center' },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: tokens.color.ink,
+  },
+  heroSection: {
+    alignItems: 'center',
+    marginBottom: tokens.space.lg,
+  },
   addBar: {
-    marginTop: tokens.space.md,
+    marginTop: tokens.space.sm,
     width: '100%',
-    minHeight: 46,
+    height: 48,
     borderRadius: tokens.radius.chip,
     backgroundColor: tokens.color.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBarText: { ...tokens.type.label, color: tokens.color.ink, fontWeight: '600' },
-  sectionCard: { marginBottom: tokens.space.md },
+  mealCard: {
+    marginBottom: tokens.space.md,
+    padding: tokens.space.lg,
+  },
+  mealTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.space.md,
+  },
+  mealThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: tokens.color.surfaceMuted,
+  },
+  mealInfo: { flex: 1 },
+  mealSlot: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: tokens.color.ink,
+  },
+  mealTime: {
+    ...tokens.type.caption,
+    color: tokens.color.inkMuted,
+    marginTop: 2,
+  },
+  kcalCol: { alignItems: 'flex-end' },
+  mealKcal: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: tokens.color.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  pctText: {
+    fontSize: 12,
+    color: tokens.color.accentText,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  mealBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: tokens.space.xs,
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionCard: { marginBottom: tokens.space.md, padding: tokens.space.lg },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { ...tokens.type.body, fontWeight: '600', color: tokens.color.ink },
+  sectionTitle: { ...tokens.type.body, fontWeight: '700', color: tokens.color.ink },
   mutedText: { ...tokens.type.caption, color: tokens.color.inkMuted, marginTop: 2 },
+  waterTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: tokens.color.surfaceMuted,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  waterFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: tokens.color.accent,
+  },
   waterBtn: {
     minHeight: 44,
     paddingHorizontal: tokens.space.lg,
@@ -197,14 +351,9 @@ const styles = StyleSheet.create({
   groupHeading: {
     ...tokens.type.h2,
     color: tokens.color.ink,
-    marginTop: tokens.space.sm,
+    marginTop: tokens.space.xs,
     marginBottom: tokens.space.sm,
   },
-  mealSlot: { ...tokens.type.caption, color: tokens.color.inkMuted, fontWeight: '600' },
-  mealName: { ...tokens.type.body, color: tokens.color.ink, fontWeight: '600', maxWidth: 210 },
-  kcalCol: { alignItems: 'flex-end' },
-  mealKcal: { ...tokens.type.body, fontWeight: '700', color: tokens.color.ink, fontVariant: ['tabular-nums'] },
-  pctText: { ...tokens.type.caption, color: tokens.color.accentText, fontWeight: '600' },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -225,9 +374,31 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.color.ok,
     borderColor: tokens.color.ok,
   },
-  checkGlyph: { color: tokens.color.white, fontWeight: '700', fontSize: 14 },
-  taskTitle: { ...tokens.type.body, color: tokens.color.ink },
+  taskTitle: { ...tokens.type.body, color: tokens.color.ink, fontWeight: '500' },
   taskDone: { textDecorationLine: 'line-through', color: tokens.color.inkMuted },
-  retestCard: { marginTop: tokens.space.sm, backgroundColor: tokens.color.surface },
+  retestCard: { marginTop: tokens.space.xs, padding: tokens.space.lg },
   retestTitle: { ...tokens.type.body, fontWeight: '700', color: tokens.color.accentText },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(43,43,43,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: tokens.color.surface,
+    borderTopLeftRadius: tokens.radius.sheet,
+    borderTopRightRadius: tokens.radius.sheet,
+    padding: tokens.space.xl,
+    paddingBottom: 40,
+    gap: tokens.space.md,
+  },
+  sheetTitle: { ...tokens.type.h2, color: tokens.color.ink },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: tokens.space.md,
+    padding: tokens.space.md,
+    borderRadius: 18,
+    backgroundColor: tokens.color.surfaceMuted,
+  },
+  sheetOptionText: { ...tokens.type.body, color: tokens.color.ink, fontWeight: '600' },
 });

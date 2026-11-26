@@ -1,23 +1,37 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { tokens } from '@/theme/tokens';
 
-function TabIcon({ glyph, label, focused }: { glyph: string; label: string; focused: boolean }) {
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function TabIcon({
+  name,
+  activeName,
+  focused,
+  label,
+}: {
+  name: IoniconName;
+  activeName: IoniconName;
+  focused: boolean;
+  label: string;
+}) {
   return (
     <View style={styles.tabItem} accessibilityLabel={label}>
-      <Text style={[styles.glyph, { color: focused ? tokens.color.accent : '#CFCAC4' }]}>
-        {glyph}
-      </Text>
-      <Text style={[styles.tabLabel, { color: focused ? tokens.color.white : '#CFCAC4' }]}>
-        {label}
-      </Text>
+      <Ionicons
+        name={focused ? activeName : name}
+        size={22}
+        color={focused ? tokens.color.white : '#9A958E'}
+      />
+      {focused && <View style={styles.activeDot} />}
     </View>
   );
 }
 
 /**
- * Dark charcoal 5-slot bottom tab bar with raised peach Scan button (charcoal icon, 6.43:1 WCAG AA).
+ * Dark charcoal 5-slot floating bottom tab bar with raised peach squircle Scan button
+ * (charcoal icon on peach = 6.43:1 WCAG AA).
  */
 export default function TabsLayout() {
   return (
@@ -33,7 +47,9 @@ export default function TabsLayout() {
         options={{
           title: 'Today',
           tabBarAccessibilityLabel: 'Today tab',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="⌂" label="Today" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="home-outline" activeName="home" focused={focused} label="Today" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -41,7 +57,14 @@ export default function TabsLayout() {
         options={{
           title: 'Health',
           tabBarAccessibilityLabel: 'Health reports tab',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="◫" label="Health" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              name="document-text-outline"
+              activeName="document-text"
+              focused={focused}
+              label="Health"
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -51,7 +74,7 @@ export default function TabsLayout() {
           tabBarAccessibilityLabel: 'Scan meal or lab report',
           tabBarIcon: () => (
             <View style={styles.scanButton} accessible accessibilityLabel="Scan">
-              <Text style={styles.scanGlyph}>⊞</Text>
+              <Ionicons name="scan-outline" size={24} color={tokens.color.onAccent} />
             </View>
           ),
         }}
@@ -61,7 +84,9 @@ export default function TabsLayout() {
         options={{
           title: 'Plan',
           tabBarAccessibilityLabel: 'Health plan tab',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="★" label="Plan" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="star-outline" activeName="star" focused={focused} label="Plan" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -69,7 +94,14 @@ export default function TabsLayout() {
         options={{
           title: 'Me',
           tabBarAccessibilityLabel: 'Profile and settings tab',
-          tabBarIcon: ({ focused }) => <TabIcon glyph="⚙" label="Me" focused={focused} />,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              name="settings-outline"
+              activeName="settings"
+              focused={focused}
+              label="Me"
+            />
+          ),
         }}
       />
     </Tabs>
@@ -79,13 +111,19 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: tokens.color.ink,
-    height: 76,
+    height: 70,
     borderTopWidth: 0,
-    borderRadius: 32,
-    marginHorizontal: 14,
+    borderRadius: 34,
+    marginHorizontal: 16,
     marginBottom: 14,
     position: 'absolute',
-    paddingBottom: 6,
+    paddingBottom: 0,
+    paddingTop: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    elevation: 8,
   },
   tabItem: {
     alignItems: 'center',
@@ -93,28 +131,27 @@ const styles = StyleSheet.create({
     minWidth: 48,
     minHeight: 44,
   },
-  glyph: {
-    fontSize: 20,
-  },
-  tabLabel: {
-    fontSize: 11,
-    marginTop: 2,
-    fontWeight: '500',
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: tokens.color.accent,
+    marginTop: 4,
   },
   scanButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 20,
     backgroundColor: tokens.color.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
     borderWidth: 4,
     borderColor: tokens.color.bg,
-  },
-  scanGlyph: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: tokens.color.onAccent, // Charcoal on peach (6.43:1)
+    shadowColor: tokens.color.accent,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
 });
