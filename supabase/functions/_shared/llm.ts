@@ -16,7 +16,7 @@ const GEMINI_CANDIDATES = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-f
 
 async function fetchGeminiFlashModels(apiKey: string): Promise<string[]> {
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey } });
     if (!res.ok) return [];
     const json = await res.json();
     return ((json.models ?? []) as Array<{ name: string; supportedGenerationMethods?: string[] }>)
@@ -59,10 +59,10 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
     }
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: opts.systemPrompt }] },
           contents: [{ role: 'user', parts }],

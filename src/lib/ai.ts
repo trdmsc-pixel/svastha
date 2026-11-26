@@ -22,7 +22,6 @@ export function aiTransportLabel(): string {
 
 async function viaSupabase<T>(endpoint: AiEndpoint, body: unknown): Promise<AiResult<T> | null> {
   if (!isSupabaseConfigured) return null;
-  if (endpoint === 'suggest-recipes') return null; // Handled by /api/suggest-recipes
   const { data: sess } = await supabase.auth.getSession();
   if (!sess.session) return null;
   const { data, error } = await supabase.functions.invoke(endpoint, { body: body as Record<string, unknown> });
@@ -74,4 +73,15 @@ export async function callAi<T>(endpoint: AiEndpoint, body: unknown, timeoutMs =
   } finally {
     clearTimeout(timer);
   }
+}
+/**
+ * Largest raw file we can upload on the active transport. Vercel functions reject request
+ * bodies over ~4.5 MB (base64 adds ~33%), Supabase Edge Functions accept 15 MB.
+ */
+export async function maxUploadBytes(): Promise<number> {
+  if (isSupabaseConfigured) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return 10 * 1024 * 1024;
+  }
+  return Math.floor(3.1 * 1024 * 1024);
 }

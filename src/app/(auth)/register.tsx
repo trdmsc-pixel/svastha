@@ -5,7 +5,7 @@ import { tokens } from '@/theme/tokens';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
 import { Banner, Field, Screen, ScreenHeader, ui } from '@/components/ui';
-import { passwordStrength, useAuthStore } from '@/store/useAuthStore';
+import { passwordStrength, useAuthStore, validatePassword } from '@/store/useAuthStore';
 
 function Check({ on, onToggle, text }: { on: boolean; onToggle: () => void; text: string }) {
   return (
@@ -29,6 +29,8 @@ export default function RegisterScreen() {
   const [busy, setBusy] = useState(false);
   const strength = passwordStrength(pw);
   const submit = async () => {
+    const pwErr = validatePassword(pw);
+    if (pwErr) return setError(pwErr);
     if (pw !== pw2) return setError('Passwords do not match.');
     if (!adult) return setError('You must be 18 or older to use Svastha (DPDP Act 2023).');
     if (!consent) return setError('Please accept the health-data consent notice.');

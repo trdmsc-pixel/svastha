@@ -14,8 +14,19 @@ import { Sheet } from '@/components/Sheet';
 import { Icon } from '@/components/Icon';
 import { ageFromDob } from '@/lib/dates';
 
+const LOCK_OPTIONS = [
+  { s: 0, label: 'immediately' },
+  { s: 60, label: 'after 1 min' },
+  { s: 300, label: 'after 5 min' },
+  { s: 900, label: 'after 15 min' },
+];
+
 export default function MeScreen() {
-  const { session, biometricEnabled, setBiometricEnabled, logout, deleteAccount } = useAuthStore();
+  const { session, biometricEnabled, setBiometricEnabled, lockAfterSeconds, setLockAfterSeconds, changePassword, logout, deleteAccount } = useAuthStore();
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwCur, setPwCur] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
   const {
     profile,
     healthBackground,
@@ -133,12 +144,10 @@ export default function MeScreen() {
               </Text>
             </View>
           )}
-          <Button
-            label="Edit Profile & Health Background"
-            variant="secondary"
-            onPress={() => router.push('/(auth)/profile-setup')}
-            style={{ marginTop: tokens.space.md }}
-          />
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: tokens.space.md }}>
+            <Button label="Edit profile" icon="pencil" variant="secondary" compact style={{ flex: 1 }} onPress={() => router.push({ pathname: '/(auth)/profile-setup', params: { mode: 'edit' } })} />
+            <Button label="Health background" icon="heart" variant="secondary" compact style={{ flex: 1 }} onPress={() => router.push({ pathname: '/(auth)/profile-setup', params: { mode: 'edit', section: 'health' } })} />
+          </View>
         </Card>
 
         {statusMsg && (
@@ -223,7 +232,7 @@ export default function MeScreen() {
           <SettingRow
             icon="lock"
             title="Biometric App Lock"
-            subtitle="Face ID / Fingerprint unlock"
+            subtitle={biometricEnabled ? `On · locks ${LOCK_OPTIONS.find((o) => o.s === lockAfterSeconds)?.label ?? 'after 1 min'}` : 'Face ID / Touch ID / Fingerprint, passcode fallback'}
             right={
               <Toggle
                 label="Biometric App Lock"
@@ -232,6 +241,19 @@ export default function MeScreen() {
               />
             }
           />
+          {biometricEnabled && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 8 }}>
+              {LOCK_OPTIONS.map((o) => (
+                <Pressable key={o.s} onPress={() => setLockAfterSeconds(o.s)} accessibilityRole="radio" accessibilityState={{ selected: lockAfterSeconds === o.s }}
+                  style={{ paddingHorizontal: 12, minHeight: 36, justifyContent: 'center', borderRadius: 999, backgroundColor: lockAfterSeconds === o.s ? tokens.color.accent : tokens.color.surfaceMuted }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: tokens.color.onAccent }}>{o.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {session?.mode !== 'demo' && (
+            <SettingRow icon="key" title="Change password" subtitle={session?.mode === 'supabase' ? 'Cloud account' : 'Stored on this device'} onPress={() => setPwOpen(true)} />
+          )}
           <SettingRow
             icon="download"
             title="Export My Data"
@@ -304,11 +326,18 @@ export default function MeScreen() {
           </Pressable>
         </View>
       </Sheet>
+      <Sheet visible={pwOpen} onClose={() => { setPwOpen(false); setPwMsg(null); }} title="Change password">
+        {session?.mode === 'local' && <TextInput value={pwCur} onChangeText={setPwCur} secureTextEntry placeholder="Current password" placeholderTextColor={tokens.color.inkMuted} style={styles.pwInput} accessibilityLabel="Current password" />}
+        <TextInput value={pwNew} onChangeText={setPwNew} secureTextEntry placeholder="New password (8+ chars, letter + number)" placeholderTextColor={tokens.color.inkMuted} style={styles.pwInput} accessibilityLabel="New password" />
+        {pwMsg && <Text style={{ color: pwMsg.startsWith('Password updated') ? tokens.color.ok : tokens.color.risk, fontWeight: '600', marginVertical: 8 }}>{pwMsg}</Text>}
+        <Button label="Update password" onPress={async () => { const r = await changePassword(pwCur, pwNew); setPwMsg(r.ok ? 'Password updated.' : r.error); if (r.ok) { setPwCur(''); setPwNew(''); } }} />
+      </Sheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  pwInput: { minHeight: 50, borderRadius: 16, borderWidth: 1, borderColor: tokens.color.border, backgroundColor: tokens.color.white, paddingHorizontal: 14, marginBottom: 10, color: tokens.color.ink, fontSize: 16 },
   scroll: { padding: tokens.space.lg, paddingBottom: 120 },
   title: { ...tokens.type.h1, color: tokens.color.ink, marginBottom: tokens.space.md },
   profileCard: { marginBottom: tokens.space.md, padding: tokens.space.lg },

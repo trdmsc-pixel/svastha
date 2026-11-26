@@ -1,227 +1,191 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { tokens } from '@/theme/tokens';
 import { useAppStore } from '@/store/useAppStore';
+import { useScanLauncher } from '@/store/useScanLauncher';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { StatusChip } from '@/components/Chip';
 import { RedFlagBanner } from '@/components/RedFlagBanner';
 import { RangeBar } from '@/components/RangeBar';
 import { DisclaimerFooter } from '@/components/DisclaimerFooter';
+import { Icon } from '@/components/Icon';
+import { Sheet } from '@/components/Sheet';
+import { EmptyState, Pill, Screen, SectionTitle, ui } from '@/components/ui';
 import { compareReports } from '@/engine/biomarkerEngine';
 
-export default function HealthScreen() {
-  const { reports, loadSampleReport, importFollowUpSampleReport, buildPlanForReport } = useAppStore();
-  const [showOk, setShowOk] = useState(false);
-  const [whyText, setWhyText] = useState<string | null>(null);
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const latest = reports[0];
-  const previous = reports[1];
-  const comparison = latest && previous ? compareReports(previous.values, latest.values) : null;
+export default function HealthScreen() {
+  const { reports, activePlan, loadSampleReport, importFollowUpSampleReport, buildPlanForReport, deleteReport } = useAppStore();
+  const [idx, setIdx] = useState(0);
+  const [showOk, setShowOk] = useState(false);
+  const [whyFor, setWhyFor] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const i = Math.min(idx, Math.max(0, reports.length - 1));
+  const report = reports[i];
+  const previous = reports[i + 1];
+  const comparison = report && previous ? compareReports(previous.values, report.values) : null;
+  const sum = report?.summary;
+  const importReport = () => {
+    useScanLauncher.getState().request('report');
+    router.navigate('/(tabs)/scan');
+  };
+
+  if (!report) {
+    return (
+      <Screen>
+        <ScrollView contentContainerStyle={ui.scroll}>
+          <Text style={[ui.h1, { marginTop: 12 }]}>Health</Text>
+          <Card style={{ marginTop: 16 }}>
+            <EmptyState icon="report" title="No lab report yet" body="Import a PDF or photos of your report. You’ll get a clear summary, red-flag checks and a personal plan with a retest date.">
+              <Button label="Import lab report" icon="upload" onPress={importReport} style={{ marginTop: 16, alignSelf: 'stretch' }} />
+              <Button label="Try a sample report" variant="ghost" icon="sparkles" onPress={() => buildPlanForReport(loadSampleReport().id)} />
+            </EmptyState>
+          </Card>
+        </ScrollView>
+      </Screen>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Health & Reports</Text>
+    <Screen>
+      <ScrollView contentContainerStyle={ui.scroll} showsVerticalScrollIndicator={false}>
+        <View style={[ui.between, { marginTop: 12 }]}>
+          <Text style={ui.h1}>Health</Text>
+          <Button label="Import" icon="upload" compact variant="secondary" onPress={importReport} />
+        </View>
 
-        {!latest ? (
-          <Card>
-            <Text style={styles.h2}>No lab report yet</Text>
-            <Text style={styles.body}>
-              Import a PDF or photo of your lab report to get a clear summary and personal plan.
-            </Text>
-            <Button label="Try with a sample report" onPress={() => loadSampleReport()} style={{ marginTop: 16 }} />
-          </Card>
-        ) : (
-          <>
-            <Card style={styles.mb}>
-              <Text style={styles.caption}>{latest.lab_name}</Text>
-              <Text style={styles.h2}>Report Summary</Text>
-              <Text style={styles.body}>{latest.summary?.snapshot_sentence}</Text>
-
-              {latest.summary && (
-                <View style={styles.counterRow}>
-                  <View style={[styles.counterBox, { backgroundColor: tokens.color.riskBg }]}>
-                    <Text style={[styles.counterNum, { color: tokens.color.risk }]}>
-                      {latest.summary.counts.risk}
-                    </Text>
-                    <Text style={[styles.counterLabel, { color: tokens.color.risk }]}>Needs attention</Text>
-                  </View>
-                  <View style={[styles.counterBox, { backgroundColor: tokens.color.watchBg }]}>
-                    <Text style={[styles.counterNum, { color: tokens.color.watch }]}>
-                      {latest.summary.counts.watch}
-                    </Text>
-                    <Text style={[styles.counterLabel, { color: tokens.color.watch }]}>Watch</Text>
-                  </View>
-                  <View style={[styles.counterBox, { backgroundColor: tokens.color.okBg }]}>
-                    <Text style={[styles.counterNum, { color: tokens.color.ok }]}>
-                      {latest.summary.counts.ok}
-                    </Text>
-                    <Text style={[styles.counterLabel, { color: tokens.color.ok }]}>Normal</Text>
-                  </View>
-                </View>
-              )}
-            </Card>
-
-            {latest.summary && <RedFlagBanner alerts={latest.summary.red_flags} />}
-
-            {/* Report-to-report comparison */}
-            {comparison && (
-              <Card style={styles.mb}>
-                <Text style={styles.h2}>Comparison vs Previous Report</Text>
-                <Text style={[styles.body, { color: tokens.color.ok, fontWeight: '700' }]}>
-                  {comparison.headline}
-                </Text>
-                {comparison.items
-                  .filter((i) => i.delta !== 0)
-                  .map((item) => (
-                    <View key={item.biomarker_code} style={styles.rowBetween}>
-                      <Text style={styles.body}>{item.display_name}</Text>
-                      <Text style={styles.caption}>
-                        {item.previous_value} → {item.current_value} {item.unit} ({item.direction})
-                      </Text>
-                    </View>
-                  ))}
-              </Card>
-            )}
-
-            {/* Risk Groups */}
-            {latest.summary?.risk_groups.map((group) => (
-              <Card key={group.system} style={styles.mb}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.h2}>{group.system}</Text>
-                  <Pressable
-                    onPress={() => setWhyText(group.why_rule)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Why for ${group.system}`}
-                  >
-                    <Text style={styles.whyLink}>Why?</Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.body}>{group.explanation}</Text>
-
-                {group.markers.map((m) => (
-                  <View key={m.biomarker_code} style={styles.markerBlock}>
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.markerName}>{m.display_name}</Text>
-                      <StatusChip status={m.status} />
-                    </View>
-                    <Text style={styles.markerVal}>
-                      {m.value} {m.unit}  (Ref: {m.ref_raw})
-                    </Text>
-                    <RangeBar item={m} />
-                  </View>
-                ))}
-              </Card>
-            ))}
-
-            {/* Cross-marker patterns */}
-            {latest.summary?.patterns.map((p) => (
-              <Card key={p.rule_id} style={styles.mb}>
-                <Text style={styles.caption}>CROSS-MARKER PATTERN</Text>
-                <Text style={styles.h2}>{p.title}</Text>
-                <Text style={styles.body}>{p.insight}</Text>
-              </Card>
-            ))}
-
-            {/* Ask Your Doctor */}
-            {latest.summary && (
-              <Card style={styles.mb}>
-                <Text style={styles.h2}>Ask Your Doctor</Text>
-                {latest.summary.doctor_points.map((pt, idx) => (
-                  <Text key={idx} style={styles.bullet}>
-                    • {pt}
-                  </Text>
-                ))}
-                <Text style={[styles.caption, { marginTop: 8 }]}>
-                  Follow-up tests noted by lab (for your doctor to decide):{' '}
-                  {latest.summary.followup_tests_from_lab_notes.join(', ')}
-                </Text>
-              </Card>
-            )}
-
-            {/* Collapsible In-Range Markers */}
-            <Card style={styles.mb}>
-              <Pressable
-                onPress={() => setShowOk((v) => !v)}
-                accessibilityRole="button"
-                accessibilityLabel="Toggle normal in-range values"
-                style={styles.rowBetween}
-              >
-                <Text style={styles.h2}>
-                  What’s okay ({latest.summary?.ok_markers.length ?? 0})
-                </Text>
-                <Text style={styles.whyLink}>{showOk ? 'Hide' : 'Show'}</Text>
+        {reports.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }} contentContainerStyle={{ gap: 8 }}>
+            {reports.map((r, k) => (
+              <Pressable key={r.id} onPress={() => setIdx(k)} style={[styles.repChip, k === i && styles.repChipOn]} accessibilityRole="tab" accessibilityState={{ selected: k === i }}>
+                <Text style={[ui.label, { fontWeight: '700' }, k === i && { color: tokens.color.white }]}>{fmtDate(r.collected_at)}</Text>
+                <Text style={[ui.muted, k === i && { color: '#DDD' }]} numberOfLines={1}>{r.lab_name}</Text>
               </Pressable>
-              {showOk &&
-                latest.summary?.ok_markers.map((m) => (
-                  <View key={m.biomarker_code} style={styles.okRow}>
-                    <Text style={styles.body}>{m.display_name}</Text>
-                    <Text style={styles.caption}>
-                      {m.value} {m.unit}
-                    </Text>
-                  </View>
-                ))}
-            </Card>
+            ))}
+          </ScrollView>
+        )}
 
-            {whyText && (
-              <Card muted style={styles.mb}>
-                <Text style={styles.caption}>DETERMINISTIC RULE PROVENANCE</Text>
-                <Text style={styles.body}>{whyText}</Text>
-                <Pressable onPress={() => setWhyText(null)}>
-                  <Text style={styles.whyLink}>Dismiss</Text>
-                </Pressable>
-              </Card>
-            )}
-
-            <View style={styles.actionStack}>
-              <Button
-                label="Build / Refresh My Plan"
-                onPress={() => {
-                  buildPlanForReport(latest.id);
-                  router.push('/(tabs)/plan');
-                }}
-              />
-              <Button
-                label="Ask About This Report"
-                variant="secondary"
-                onPress={() => router.push('/report/chat')}
-              />
-              <Button
-                label="Simulate 12-Week Retest Comparison"
-                variant="accent"
-                onPress={() => importFollowUpSampleReport()}
-              />
+        <Card style={{ marginTop: 14 }}>
+          <View style={ui.between}>
+            <View style={{ flex: 1 }}>
+              <Text style={ui.micro}>{report.lab_name}</Text>
+              <Text style={ui.muted}>Collected {fmtDate(report.collected_at)} · {report.values.length} values · {report.source_type.toUpperCase()}</Text>
             </View>
+            <Pressable onPress={() => setConfirmDelete(true)} accessibilityRole="button" accessibilityLabel="Delete this report" hitSlop={10}>
+              <Icon name="trash" size={18} color={tokens.color.inkMuted} />
+            </Pressable>
+          </View>
+          <Text style={[ui.body, { marginTop: 10 }]}>{sum?.snapshot_sentence}</Text>
+          {sum && (
+            <View style={styles.counters}>
+              {([['risk', 'Needs attention', 'alert'], ['watch', 'Watch', 'eye'], ['ok', 'Normal', 'check']] as const).map(([k, label, icon]) => (
+                <View key={k} style={[styles.counter, { backgroundColor: tokens.color[`${k}Bg`] }]}>
+                  <Icon name={icon} size={16} color={tokens.color[k]} />
+                  <Text style={[styles.counterNum, { color: tokens.color[k] }]}>{sum.counts[k]}</Text>
+                  <Text style={[styles.counterLabel, { color: tokens.color[k] }]}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </Card>
 
-            <DisclaimerFooter />
+        {sum && sum.red_flags.length > 0 && <View style={{ marginTop: 14 }}><RedFlagBanner alerts={sum.red_flags} /></View>}
+
+        {comparison && (
+          <Card style={{ marginTop: 14 }}>
+            <View style={[ui.row, { gap: 8 }]}><Icon name="trendingUp" color={tokens.color.ok} /><Text style={ui.h3}>Since {fmtDate(previous!.collected_at)}</Text></View>
+            <Text style={[ui.body, { color: tokens.color.ok, fontWeight: '700', marginTop: 4 }]}>{comparison.headline}</Text>
+            {comparison.items.filter((c) => c.direction !== 'unchanged').map((c) => (
+              <View key={c.biomarker_code} style={[ui.between, { marginTop: 8 }]}>
+                <Text style={[ui.label, { flex: 1 }]}>{c.display_name}</Text>
+                <Pill icon={c.direction === 'improved' ? 'trendingUp' : 'trendingDown'} tone={c.direction === 'improved' ? 'ok' : 'risk'} label={`${c.previous_value} → ${c.current_value} ${c.unit}`} />
+              </View>
+            ))}
+          </Card>
+        )}
+
+        {sum?.risk_groups.map((g) => (
+          <Card key={g.system} style={{ marginTop: 14 }}>
+            <View style={ui.between}>
+              <Text style={ui.h2}>{g.system}</Text>
+              <Pressable onPress={() => setWhyFor(whyFor === g.system ? null : g.system)} accessibilityRole="button" hitSlop={10}>
+                <Text style={ui.accent}>{whyFor === g.system ? 'Hide' : 'Why?'}</Text>
+              </Pressable>
+            </View>
+            {whyFor === g.system && <Text style={[ui.muted, styles.why]}>{g.why_rule}</Text>}
+            {g.markers.map((m) => (
+              <View key={m.biomarker_code} style={styles.marker}>
+                <View style={ui.between}>
+                  <Text style={[ui.body, { fontWeight: '700', flex: 1 }]}>{m.display_name}</Text>
+                  <StatusChip status={m.status} />
+                </View>
+                <Text style={ui.muted}>{m.value} {m.unit} · lab range {m.ref_raw}{m.severity > 1 ? ` · ${m.severity.toFixed(2)}× upper limit` : ''}</Text>
+                <RangeBar item={m} />
+              </View>
+            ))}
+            <Text style={[ui.label, { marginTop: 10, fontWeight: '700' }]}>What may help</Text>
+            {g.what_helps.map((w) => <Text key={w} style={[ui.label, { marginTop: 4 }]}>• {w}</Text>)}
+          </Card>
+        ))}
+
+        {sum?.patterns.map((p) => (
+          <Card key={p.rule_id} variant="muted" style={{ marginTop: 14 }}>
+            <Text style={ui.micro}>Cross-marker pattern</Text>
+            <Text style={ui.h3}>{p.title}</Text>
+            <Text style={ui.label}>{p.insight}</Text>
+          </Card>
+        ))}
+
+        {sum && sum.doctor_points.length > 0 && (
+          <>
+            <SectionTitle>Ask your doctor</SectionTitle>
+            <Card>
+              {sum.doctor_points.map((pt) => <Text key={pt} style={[ui.label, { marginBottom: 8 }]}>• {pt}</Text>)}
+              {sum.followup_tests_from_lab_notes.length > 0 && <Text style={ui.muted}>Follow-up tests noted by the lab (your doctor decides): {sum.followup_tests_from_lab_notes.join(', ')}</Text>}
+            </Card>
           </>
         )}
+
+        <Card style={{ marginTop: 14 }}>
+          <Pressable onPress={() => setShowOk(!showOk)} style={ui.between} accessibilityRole="button" accessibilityState={{ expanded: showOk }}>
+            <Text style={ui.h3}>In range ({sum?.ok_markers.length ?? 0})</Text>
+            <Icon name={showOk ? 'chevronUp' : 'chevronDown'} />
+          </Pressable>
+          {showOk && sum?.ok_markers.map((m) => (
+            <View key={m.biomarker_code} style={[ui.between, { marginTop: 8 }]}>
+              <Text style={[ui.label, { flex: 1 }]}>{m.display_name}</Text>
+              <Text style={ui.muted}>{m.value} {m.unit}</Text>
+            </View>
+          ))}
+        </Card>
+
+        <View style={{ gap: 10, marginTop: 16 }}>
+          <Button label={activePlan?.report_id === report.id ? 'Refresh my plan from this report' : 'Build my plan from this report'} icon="star" onPress={() => { buildPlanForReport(report.id); router.navigate('/(tabs)/plan'); }} />
+          <Button label="Ask about this report" icon="message" variant="secondary" onPress={() => router.push('/report/chat')} />
+          {report.is_sample && !reports.some((r) => r.id === 'sample-followup-002') && (
+            <Button label="Preview a 12-week retest (sample)" icon="refresh" variant="ghost" onPress={() => { importFollowUpSampleReport(); setIdx(0); }} />
+          )}
+        </View>
+        <DisclaimerFooter />
       </ScrollView>
-    </SafeAreaView>
+
+      <Sheet visible={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this report?" subtitle="Its values and any plan built from it will be removed from this device.">
+        <Button label="Delete report" variant="danger" icon="trash" onPress={() => { deleteReport(report.id); setIdx(0); setConfirmDelete(false); }} />
+      </Sheet>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: tokens.color.bg },
-  scroll: { padding: tokens.space.lg, paddingBottom: 110 },
-  title: { ...tokens.type.h1, color: tokens.color.ink, marginBottom: tokens.space.md },
-  h2: { ...tokens.type.h2, color: tokens.color.ink, marginBottom: tokens.space.xs },
-  body: { ...tokens.type.body, color: tokens.color.ink, marginBottom: tokens.space.xs },
-  caption: { ...tokens.type.caption, color: tokens.color.inkMuted },
-  mb: { marginBottom: tokens.space.md },
-  counterRow: { flexDirection: 'row', gap: tokens.space.sm, marginTop: tokens.space.md },
-  counterBox: { flex: 1, borderRadius: 18, padding: tokens.space.md, alignItems: 'center' },
-  counterNum: { ...tokens.type.h1, fontVariant: ['tabular-nums'] },
-  counterLabel: { ...tokens.type.caption, fontWeight: '600', textAlign: 'center' },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  whyLink: { ...tokens.type.label, color: tokens.color.accentText, fontWeight: '700' },
-  markerBlock: { marginTop: tokens.space.md, paddingTop: tokens.space.sm, borderTopWidth: 1, borderTopColor: tokens.color.border },
-  markerName: { ...tokens.type.body, fontWeight: '600', color: tokens.color.ink },
-  markerVal: { ...tokens.type.label, color: tokens.color.inkMuted, marginTop: 2 },
-  bullet: { ...tokens.type.body, color: tokens.color.ink, marginTop: 6 },
-  okRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  actionStack: { gap: tokens.space.sm, marginTop: tokens.space.sm },
+  repChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: tokens.color.glassStrong, borderWidth: 1, borderColor: tokens.color.border, maxWidth: 180 },
+  repChipOn: { backgroundColor: tokens.color.ink, borderColor: tokens.color.ink },
+  counters: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  counter: { flex: 1, borderRadius: 18, padding: 10, alignItems: 'center' },
+  counterNum: { fontSize: 26, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  counterLabel: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  marker: { marginTop: 12, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: tokens.color.border },
+  why: { backgroundColor: tokens.color.surfaceMuted, padding: 10, borderRadius: 12, marginTop: 8 },
 });

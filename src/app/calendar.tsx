@@ -14,7 +14,8 @@ import {
   todayKey,
   WEEKDAYS_SHORT,
 } from '@/lib/dates';
-import { calendarSupported, DeviceEvent, fetchDeviceEvents, syncPlanToDeviceCalendar } from '@/lib/calendarSync';
+import { calendarSupported, DeviceEvent, fetchDeviceEvents, getCalendarPermission, requestCalendarPermission, syncPlanToDeviceCalendar } from '@/lib/calendarSync';
+import { router } from 'expo-router';
 import { Screen, ScreenHeader, SectionTitle, IconButton } from '@/components/ui';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -31,7 +32,13 @@ export default function CalendarScreen() {
     setDeviceEventIds,
     toggleTaskDone,
     addWater,
+    settings,
   } = useAppStore();
+  const [calPerm, setCalPerm] = useState<'granted' | 'denied' | 'undetermined' | 'unsupported'>('unsupported');
+  const [permTick, setPermTick] = useState(0);
+  useEffect(() => {
+    getCalendarPermission().then(setCalPerm).catch(() => setCalPerm('unsupported'));
+  }, [permTick]);
 
   const [monthCursor, setMonthCursor] = useState(selectedDate);
   const [deviceEvents, setDeviceEvents] = useState<DeviceEvent[]>([]);
@@ -46,24 +53,28 @@ export default function CalendarScreen() {
   const today = todayKey();
 
   useEffect(() => {
-    if (!calendarSupported) return;
+    if (!calendarSupported || calPerm !== 'granted' || !settings.showDeviceCalendarEvents) {
+      setDeviceEvents([]);
+      return;
+    }
     const d = fromDateKey(selectedDate);
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
     const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
     fetchDeviceEvents(start, end).then(setDeviceEvents).catch(() => setDeviceEvents([]));
-  }, [selectedDate]);
+  }, [selectedDate, calPerm, settings.showDeviceCalendarEvents]);
 
   const handleSync = async () => {
     const res = await syncPlanToDeviceCalendar(tasks, activePlan?.retest_date, deviceEventIds);
     if (res.ok) setDeviceEventIds(res.eventIds);
     setSyncMessage(res.message);
+    setPermTick((t) => t + 1);
   };
 
   return (
     <Screen>
       <ScreenHeader
         title="Calendar"
-        subtitle={monthTitle(monthCursor)}
+        subtitle={selectedDate === todayKey() ? 'Tap a day to view or log it' : 'Viewing a different day'}
         right={
           <IconButton
             icon="calendar"
@@ -222,13 +233,32 @@ export default function CalendarScreen() {
               ? 'Open Svastha on iOS or Android to sync tasks into your phone’s “Svastha” calendar (Google Calendar / iCloud).'
               : 'Events live in a dedicated “Svastha” calendar so they sync to Google Calendar & iCloud automatically.'}
           </Text>
-          {deviceEvents.length > 0 && (
-            <View style={{ marginTop: tokens.space.sm, gap: 4 }}>
-              {deviceEvents.slice(0, 4).map((ev) => (
-                <Text key={ev.id} style={styles.eventItem}>
-                  • {ev.title} ({ev.calendarTitle})
-                </Text>
-              ))}
+          {calendarSupported && calPerm !== 'granted' && (
+            <Button
+              label={calPerm === 'denied' ? 'Calendar access is off — enable in phone Settings' : 'Connect my phone calendar'}
+              icon="calendar"
+              variant="accent"
+              disabled={calPerm === 'denied'}
+              onPress={async () => { await requestCalendarPermission(); setPermTick((t) => t + 1); }}
+              style={{ marginTop: tokens.space.md }}
+            />
+          )}
+          {calPerm === 'granted' && settings.showDeviceCalendarEvents && (
+            <View style={{ marginTop: tokens.space.sm, gap: 6 }}>
+              <Text style={[styles.muted, { fontWeight: '700' }]}>From your phone calendar</Text>
+              {deviceEvents.length === 0 ? (
+                <Text style={styles.muted}>No events on this day.</Text>
+              ) : (
+                deviceEvents.slice(0, 8).map((ev) => (
+                  <View key={ev.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ev.color }} />
+                    <Text style={[styles.eventItem, { flex: 1 }]}>
+                      {ev.allDay ? 'All day' : new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {ev.title}
+                    </Text>
+                    <Text style={styles.muted}>{ev.calendarTitle}</Text>
+                  </View>
+                ))
+              )}
             </View>
           )}
           {syncMessage && <Text style={styles.syncMsg}>{syncMessage}</Text>}
@@ -238,6 +268,7 @@ export default function CalendarScreen() {
             onPress={handleSync}
             style={{ marginTop: tokens.space.md }}
           />
+          <Button label="Open this day on Today" icon="home" variant="ghost" onPress={() => router.navigate('/(tabs)')} />
         </Card>
       </ScrollView>
     </Screen>

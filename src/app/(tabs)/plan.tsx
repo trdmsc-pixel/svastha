@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeInRight, FadeOutLeft, useReducedMotion } from 'react-native-reanimated';
@@ -7,6 +7,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useInbox, useWeeklyAdherence } from '@/hooks/useHealthData';
 import { CURATED_RECIPES, FOCUS_LABELS, normaliseAiRecipe, rankRecipes } from '@/engine/recipeEngine';
 import { callAi } from '@/lib/ai';
+import { focusAreasFor } from '@/engine/planBuilder';
 import { getLocalOrCdnImage } from '@/lib/cdn';
 import { Recipe, RecipeFocus } from '@/types/domain';
 import { Icon, IconName } from '@/components/Icon';
@@ -56,14 +57,10 @@ export default function PlanScreen() {
   const focusAreas = useMemo<RecipeFocus[]>(() => {
     const latest = reports[0];
     if (!latest) return ['fibre', 'protein'];
-    const flagged = latest.values.filter((v) => v.status !== 'normal').map((v) => v.biomarker_code);
-    const out = new Set<RecipeFocus>(['fibre']);
-    if (flagged.some((c) => c === 'ALT' || c === 'AST' || c === 'GGTP')) out.add('liver');
-    if (flagged.some((c) => c === 'LDL' || c === 'NON_HDL')) out.add('ldl');
-    if (flagged.includes('HDL')) out.add('hdl');
-    if (flagged.some((c) => c === 'GLUCOSE_FASTING' || c === 'HBA1C')) out.add('glucose');
-    return Array.from(out);
-  }, [reports]);
+    const f = focusAreasFor(latest.values);
+    if (profile.goals.some((g) => /lose|weight/i.test(g))) f.push('weight');
+    return Array.from(new Set<RecipeFocus>([...f, 'fibre']));
+  }, [reports, profile.goals]);
 
   const rankedRecipes = useMemo(() => {
     const pool = [
@@ -87,14 +84,30 @@ export default function PlanScreen() {
     return list;
   }, [settings.aiRecipeSuggestions, aiRecipes, focusAreas, profile, healthBackground, selectedCat, savedRecipeIds, search]);
 
+  const autoFetched = useRef(false);
+  useEffect(() => {
+    if (settings.aiRecipeSuggestions && !aiRecipes && !autoFetched.current) {
+      autoFetched.current = true;
+      handleFetchAiRecipes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.aiRecipeSuggestions, aiRecipes]);
+
   const handleFetchAiRecipes = async () => {
     setAiBusy(true);
     setAiStatus(null);
     const res = await callAi<{ recipes: unknown[] }>('suggest-recipes', {
       diet_type: profile.diet_type,
       allergies: healthBackground.allergies,
+      conditions: healthBackground.conditions,
+      pregnant: healthBackground.pregnant,
       cuisine_prefs: profile.cuisine_prefs,
+      budget: profile.budget_level,
+      goals: profile.goals,
+      fasting: profile.fasting_practices,
       focus: focusAreas,
+      flagged_markers: (reports[0]?.values ?? []).filter((v) => v.status !== 'normal').map((v) => ({ code: v.biomarker_code, status: v.status })),
+      kcal_per_meal_target: activePlan ? Math.round(activePlan.daily_targets.kcal / 3.5) : 550,
     });
     setAiBusy(false);
     if (!res.ok) {
@@ -157,10 +170,10 @@ export default function PlanScreen() {
         {activePlan && (
           <Card delay={40} style={styles.mb}>
             <Text style={styles.accentLabel}>
-              Target retest: {activePlan.retest_date} ({activePlan.retest_weeks} weeks)
+              Target retest: {new Date(`${activePlan.retest_date}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} ({activePlan.retest_weeks} weeks)
             </Text>
             <Text style={styles.body}>
-              Goal: {activePlan.targets.map((t) => `${t.biomarker_code} ${t.target} ${t.unit}`).join(', ')}
+              Goal: {activePlan.targets.map((t) => `${t.marker} ${t.target} ${t.unit}`).join(' · ')}
             </Text>
             <Text style={styles.caption}>
               Adherence this week: {adherencePct}% · {activePlan.retest_reasoning}

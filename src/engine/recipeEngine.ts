@@ -110,6 +110,8 @@ const NON_VEG_WORDS = /chicken|mutton|fish|prawn|shrimp|meat|beef|pork|lamb|keem
 const EGG_WORDS = /egg|anda|omelette|omelet/i;
 const DAIRY_WORDS = /paneer|curd|dahi|milk|ghee|butter|cream|cheese|lassi|chaas|buttermilk|yogurt|khoa/i;
 const ROOT_WORDS = /onion|garlic|potato|aloo|carrot|beetroot|radish|ginger/i;
+// Plant-based look-alikes that are NOT dairy (peanut butter, coconut milk, soy curd…).
+const PLANT_DAIRY_LOOKALIKES = /(peanut|almond|cashew|nut|cocoa|shea|apple)\s+butter|(coconut|almond|soy|soya|oat|rice|cashew)\s+(milk|curd|yogurt|yoghurt|cream)|vegan\s+\w+/gi;
 const UNSAFE_WORDS = /alcohol|wine|beer|rum|whisky|vodka|green tea extract|egcg|kava|niacin/i;
 
 /** Returns null when the recipe is compatible, otherwise a human-readable reason it was removed. */
@@ -122,7 +124,7 @@ export function recipeExclusionReason(recipe: Recipe, profile: Pick<UserProfile,
     return 'not vegetarian';
   }
   if (diet === 'eggetarian' && NON_VEG_WORDS.test(text.replace(EGG_WORDS, ''))) return 'contains meat or fish';
-  if (diet === 'vegan' && DAIRY_WORDS.test(text)) return 'contains dairy';
+  if (diet === 'vegan' && DAIRY_WORDS.test(text.replace(PLANT_DAIRY_LOOKALIKES, ' '))) return 'contains dairy';
   if (diet === 'jain' && ROOT_WORDS.test(text)) return 'contains root vegetables';
   if (recipe.source === 'curated' && !recipe.diet_tags.includes(diet) && diet !== 'jain' && diet !== 'sattvic') return 'diet mismatch';
   for (const allergy of health.allergies ?? []) {

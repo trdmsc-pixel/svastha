@@ -1,25 +1,22 @@
 import { z } from 'https://deno.land/x/zod@v3.23.8/mod.ts';
 import { callStructuredLLM } from '../_shared/llm.ts';
 import { getAuthClient } from '../_shared/supabaseClient.ts';
+import { json, serveJson } from '../_shared/http.ts';
+import { REPORT_CHAT_PROMPT } from '../_shared/prompts.ts';
+import { buildSchemas, minimiseChatContext } from '../_shared/schemas.ts';
 
-const ChatReplySchema = z.object({
-  reply: z.string(),
-  cited_markers: z.array(z.string()),
-});
+const schemas = buildSchemas(z);
 
-const SYSTEM_PROMPT = `Answer questions grounded ONLY in the user's lab report values, plan, and logs provided in context. Never diagnose, never recommend medication doses, and direct dosing questions to a qualified doctor.`;
-
-Deno.serve(async (req) => {
-  const supabase = getAuthClient(req);
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { question, context } = await req.json();
+serveJson(async (req) => {
+  const { data: { user } } = await getAuthClient(req).auth.getUser();
+  if (!user) return json({ error: 'Unauthorized' }, 401);
+  const { question, context, history } = await req.json();
+  if (!String(question ?? '').trim()) return json({ error: 'Ask a question first.' }, 400);
+  const recent = ((history ?? []) as Array<{ role: string; text: string }>).slice(-6).map((m) => `${m.role === 'user' ? 'User' : 'Svastha'}: ${String(m.text).slice(0, 400)}`).join('\n');
   const { data, model } = await callStructuredLLM({
-    systemPrompt: SYSTEM_PROMPT,
-    userText: `Context:\n${JSON.stringify(context)}\n\nQuestion: ${question}`,
-    schema: ChatReplySchema,
+    systemPrompt: REPORT_CHAT_PROMPT,
+    userText: `Context:\n${JSON.stringify(minimiseChatContext(context)).slice(0, 20000)}\n\nRecent conversation:\n${recent}\n\nQuestion: ${String(question).slice(0, 600)}`,
+    schema: schemas.reportChat,
   });
-
-  return Response.json({ ...data, model, prompt_version: 'report-chat-v1' });
+  return json({ ...data, model, prompt_version: 'report-chat-v2' });
 });

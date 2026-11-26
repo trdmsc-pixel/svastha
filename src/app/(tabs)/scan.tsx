@@ -14,7 +14,7 @@ import { MealSlot } from '@/types/domain';
 import { ALL_FOODS, defaultServing, searchFoods } from '@/engine/foodMatcher';
 import { AiMealAnalysis, draftFromFood, MealDraftItem, mapAiMealToDraft, rescaleDraftItem, suggestSlot, sumNutrients } from '@/engine/mealAnalysis';
 import { buildReportFromParsed, ParsedReportPayload } from '@/engine/reportSummary';
-import { callAi } from '@/lib/ai';
+import { callAi, maxUploadBytes } from '@/lib/ai';
 import { captureWithCamera, pickImages, pickPdf, toEphemeral } from '@/lib/mediaIngest';
 import { friendlyDayLabel } from '@/lib/dates';
 import { haptic } from '@/lib/haptics';
@@ -70,6 +70,11 @@ export default function ScanScreen() {
       const r = await pickPdf();
       if (!r.ok) { if (!r.cancelled) setNote(r.error); return; }
       setPhase('working'); setStep(1);
+      if (r.value.bytes > (await maxUploadBytes())) {
+        r.value.discard(); setPhase('idle');
+        setNote(`That PDF is ${(r.value.bytes / 1048576).toFixed(1)} MB — too large to upload here. Photograph the result pages instead (up to 6 photos).`);
+        return;
+      }
       body = { pdfBase64: r.value.base64 }; discard = r.value.discard;
     } else {
       const r = kind === 'camera' ? await captureWithCamera().then((x) => (x.ok ? { ok: true as const, value: [x.value] } : x)) : await pickImages(true, 6);

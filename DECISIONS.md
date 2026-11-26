@@ -22,3 +22,12 @@
 ## 5. LLM Provider Abstraction
 - All AI calls run exclusively inside Supabase Edge Functions via `supabase/functions/_shared/llm.ts`.
 - Supports Gemini (`gemini-2.5-flash` default) and OpenAI-compatible endpoints via `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_VISION_MODEL`, and `LLM_TEXT_MODEL` secrets.
+
+## 6. Audit fixes (Nov 2026)
+- **One prompt/schema source for both AI backends**: `supabase/functions/_shared/prompts.ts` and `schemas.ts` are import-free so the Vercel `/api` routes (Node) and Supabase Edge Functions (Deno) share them. Schemas are tolerant (defaults for optional fields) so one missing key from the model doesn't fail a whole report import.
+- **PDF lab reports** are sent to Gemini as inline `application/pdf` (both backends previously ignored `pdfBase64`). Uploads are capped per transport: ~3.1 MB raw on Vercel (4.5 MB body limit after base64), 10 MB on Supabase.
+- **Gemini API key** is sent in the `x-goog-api-key` header, never in the URL (URLs end up in proxy/CDN logs).
+- **CORS** on every Supabase function (web calls previously failed preflight).
+- **Vercel**: functions run in `bom1` (Mumbai) with `maxDuration: 60`; `scripts/fix-web-assets.mjs` moves exported `assets/node_modules/*` to `assets/vendor/*` because Vercel does not serve `node_modules` paths.
+- **Report chat** is grounded in the user's own latest report; medicine/dose and emergency questions are blocked by a deterministic guard before any AI call, with an on-device fallback answer when AI is unreachable.
+- `api/` is now part of `npm run typecheck`; `tests/apiRoutes.test.ts` exercises the Vercel routes with a mocked Gemini.

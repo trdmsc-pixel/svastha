@@ -1,79 +1,30 @@
 import { z } from 'https://deno.land/x/zod@v3.23.8/mod.ts';
 import { callStructuredLLM } from '../_shared/llm.ts';
 import { checkRateLimit, getAuthClient } from '../_shared/supabaseClient.ts';
+import { json, serveJson } from '../_shared/http.ts';
+import { ANALYSE_MEAL_PROMPT } from '../_shared/prompts.ts';
+import { attachmentsFrom, buildSchemas } from '../_shared/schemas.ts';
 
-const AnalyseMealSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        name: z.string(),
-        match_hint: z.string().optional().default(''),
-        portion: z
-          .object({
-            amount: z.number().optional().default(1),
-            unit: z.string().optional().default('serving'),
-            grams_est: z.number().optional().default(150),
-          })
-          .optional()
-          .default({ amount: 1, unit: 'serving', grams_est: 150 }),
-        confidence: z.number().optional().default(0.8),
-      })
-    )
-    .default([]),
-  plate_type: z.enum(['thali', 'bowl', 'plate', 'packet', 'drink']).optional().default('plate'),
-  notes: z.string().optional().default(''),
-  is_food: z.boolean().optional().default(true),
-});
+const schemas = buildSchemas(z);
 
-const SYSTEM_PROMPT = `Identify all food items on the plate (especially Indian dishes and thalis) with portion estimates in Indian household units (katori, roti, piece, glass) and grams. Do NOT calculate calories — the server computes nutrients from IFCT 2017.
-
-Return ONLY valid JSON matching this exact structure:
-{
-  "items": [
-    {
-      "name": "Dal tadka",
-      "match_hint": "dal, toor, cooked",
-      "portion": { "amount": 1, "unit": "katori", "grams_est": 180 },
-      "confidence": 0.85
-    }
-  ],
-  "plate_type": "thali",
-  "notes": "",
-  "is_food": true
-}
-Allowed plate_type values: "thali", "bowl", "plate", "packet", "drink".`;
-
-Deno.serve(async (req) => {
-  const supabase = getAuthClient(req);
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const allowed = await checkRateLimit(user.id, 'analyse-meal', 60);
-  if (!allowed) return Response.json({ error: 'Daily meal scan limit (60/day) reached' }, { status: 429 });
-
-  // Zero-storage invariant: never log body; discard image buffer right after inference
-  let body: { imageBase64?: string; mimeType?: string; dietType?: string } | null = await req.json();
+serveJson(async (req) => {
+  const { data: { user } } = await getAuthClient(req).auth.getUser();
+  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!(await checkRateLimit(user.id, 'analyse-meal', 60))) return json({ error: 'Daily meal scan limit (60/day) reached' }, 429);
+  // Zero-storage invariant: body is never logged; image buffer dropped right after inference.
+  let body: Record<string, unknown> | null = await req.json();
   try {
+    const images = attachmentsFrom(body ?? {});
     const { data, model } = await callStructuredLLM({
-      systemPrompt: SYSTEM_PROMPT,
-      userText: `Diet context: ${body?.dietType ?? 'unknown'}. Identify foods and estimate portions.`,
-      imagesBase64: body?.imageBase64
-        ? [{ mimeType: body.mimeType ?? 'image/jpeg', data: body.imageBase64 }]
-        : undefined,
-      schema: AnalyseMealSchema,
+      systemPrompt: ANALYSE_MEAL_PROMPT,
+      userText: `Diet context: ${body?.dietType ?? 'unknown'}. Identify every food and drink in the photo and estimate portions.`,
+      imagesBase64: images,
+      schema: schemas.analyseMeal,
       useVision: true,
     });
-    const normalised = {
-      ...data,
-      items: data.items.map((item) => ({
-        ...item,
-        match_hint: item.match_hint || item.name,
-      })),
-    };
+    const analysis = { ...data, items: data.items.map((i: { name: string; match_hint?: string }) => ({ ...i, match_hint: i.match_hint || i.name })) };
+    return json({ analysis, model, prompt_version: 'analyse-meal-v3' });
+  } finally {
     body = null;
-    return Response.json({ analysis: normalised, model, prompt_version: 'analyse-meal-v2' });
-  } catch (err) {
-    body = null;
-    return Response.json({ error: `Meal analysis failed: ${String(err)}` }, { status: 500 });
   }
 });

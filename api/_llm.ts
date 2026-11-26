@@ -15,7 +15,7 @@ const GEMINI_CANDIDATES = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-f
 
 async function fetchGeminiFlashModels(apiKey: string): Promise<string[]> {
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': apiKey } });
     if (!res.ok) return [];
     const json = (await res.json()) as {
       models?: Array<{ name: string; supportedGenerationMethods?: string[] }>;
@@ -68,10 +68,10 @@ export async function callStructuredLLM<T>(opts: {
     }
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: opts.systemPrompt }] },
           contents: [{ role: 'user', parts }],
@@ -128,9 +128,19 @@ export async function callStructuredLLM<T>(opts: {
 }
 
 export function handleLlmError(res: VercelResponseLike, err: unknown) {
-  const code = (err as { code?: string })?.code;
-  if (code === 'not_configured') {
-    return res.status(503).json({ code: 'not_configured', error: 'GEMINI_API_KEY is not configured.' });
+  const e = err as { code?: string; status?: number; name?: string; message?: string };
+  if (e?.code === 'not_configured') {
+    return res.status(503).json({ code: 'not_configured', error: 'AI is not connected yet: GEMINI_API_KEY is not set on the server.' });
   }
-  return res.status(500).json({ error: String(err) });
+  // Log only status/model metadata — never the request body or base64 payloads.
+  console.error('[svastha-ai]', e?.status ?? '', String(e?.message ?? err).slice(0, 160));
+  if (e?.status === 429) return res.status(429).json({ error: 'The AI service is busy right now. Please try again in a minute.' });
+  if (e?.status === 413 || /too large|payload|exceeds/i.test(String(e?.message))) {
+    return res.status(413).json({ error: 'That file is too large to analyse. Try fewer pages or photos instead of a PDF.' });
+  }
+  if (e?.name === 'ZodError' || e?.name === 'SyntaxError') {
+    return res.status(502).json({ error: 'The AI returned an unreadable answer. Please try again with a clearer photo.' });
+  }
+  if (e?.status === 400) return res.status(400).json({ error: 'The AI could not read that file. If it is a password-protected PDF, remove the password or use photos.' });
+  return res.status(502).json({ error: 'The AI service had a problem. Please try again.' });
 }
