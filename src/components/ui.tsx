@@ -3,7 +3,7 @@ import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, Text
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import Animated, { interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { haptic } from '@/lib/haptics';
 import { Icon, IconName } from './Icon';
@@ -12,25 +12,63 @@ import { Icon, IconName } from './Icon';
 
 /** Warm cream canvas with two soft peach/gold light blooms — the base of every screen. */
 export function ScreenBackground() {
+  const reduced = useReducedMotion();
+  const pulse = useSharedValue(0.85);
+
+  useEffect(() => {
+    if (reduced) return;
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.82, { duration: 4200, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+  }, [reduced, pulse]);
+
+  const bloomStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <Svg width="100%" height="100%" preserveAspectRatio="none">
-        <Defs>
-          <RadialGradient id="bloomA" cx="85%" cy="4%" r="60%">
-            <Stop offset="0" stopColor="#FAD3BB" stopOpacity="0.9" />
-            <Stop offset="1" stopColor="#FAD3BB" stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="bloomB" cx="0%" cy="55%" r="55%">
-            <Stop offset="0" stopColor="#F8E2BF" stopOpacity="0.7" />
-            <Stop offset="1" stopColor="#F8E2BF" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
         <Rect width="100%" height="100%" fill={tokens.color.bg} />
-        <Rect width="100%" height="100%" fill="url(#bloomA)" />
-        <Rect width="100%" height="100%" fill="url(#bloomB)" />
       </Svg>
+      <Animated.View style={[StyleSheet.absoluteFill, bloomStyle]}>
+        <Svg width="100%" height="100%" preserveAspectRatio="none">
+          <Defs>
+            <RadialGradient id="bloomA" cx="88%" cy="4%" r="62%">
+              <Stop offset="0" stopColor="#F8C7A8" stopOpacity="0.95" />
+              <Stop offset="1" stopColor="#F8C7A8" stopOpacity="0" />
+            </RadialGradient>
+            <RadialGradient id="bloomB" cx="2%" cy="52%" r="56%">
+              <Stop offset="0" stopColor="#F8DFB4" stopOpacity="0.78" />
+              <Stop offset="1" stopColor="#F8DFB4" stopOpacity="0" />
+            </RadialGradient>
+            <RadialGradient id="bloomC" cx="85%" cy="88%" r="48%">
+              <Stop offset="0" stopColor="#D7EBD9" stopOpacity="0.55" />
+              <Stop offset="1" stopColor="#D7EBD9" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect width="100%" height="100%" fill="url(#bloomA)" />
+          <Rect width="100%" height="100%" fill="url(#bloomB)" />
+          <Rect width="100%" height="100%" fill="url(#bloomC)" />
+        </Svg>
+      </Animated.View>
     </View>
   );
+}
+
+/** Animated shimmer skeleton for AI meal analysis, report parsing, and recipe generation. */
+export function ShimmerBar({ width = '100%', height = 14, style }: { width?: number | `${number}%`; height?: number; style?: StyleProp<ViewStyle> }) {
+  const reduced = useReducedMotion();
+  const op = useSharedValue(0.45);
+  useEffect(() => {
+    if (reduced) return;
+    op.value = withRepeat(withSequence(withTiming(0.95, { duration: 750 }), withTiming(0.4, { duration: 750 })), -1, true);
+  }, [reduced, op]);
+  const anim = useAnimatedStyle(() => ({ opacity: op.value }));
+  return <Animated.View style={[{ width, height, borderRadius: height / 2, backgroundColor: '#E8DFD5' }, anim, style]} />;
 }
 
 /** Screen shell: ambient background + safe-area top padding. */

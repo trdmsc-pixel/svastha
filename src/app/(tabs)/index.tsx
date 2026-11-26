@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { tokens } from '@/theme/tokens';
@@ -10,7 +10,8 @@ import { MacroRow } from '@/components/MacroRow';
 import { FoodThumb } from '@/components/FoodThumb';
 import { Icon } from '@/components/Icon';
 import { Sheet, SheetOption } from '@/components/Sheet';
-import { GlowBar, IconButton, MiniRing, Screen, SectionTitle, ui } from '@/components/ui';
+import { GlowBar, IconButton, MiniRing, Pill, Screen, SectionTitle, ui } from '@/components/ui';
+import { buildSmartCoachTip } from '@/engine/smartCoach';
 import { useDailyTargets, useDayLog, useDayTotals, useInbox, useTasksFor } from '@/hooks/useHealthData';
 import { diffDays, formatTime12, friendlyDayLabel, fromDateKey, greetingFor, todayKey, WEEKDAYS_SHORT, weekOf } from '@/lib/dates';
 import { haptic } from '@/lib/haptics';
@@ -28,6 +29,26 @@ export default function TodayScreen() {
   const firstName = s.profile.full_name.split(' ')[0] || 'there';
   const waterPct = Math.min(100, Math.round((day.waterMl / targets.water_ml) * 100));
   const week = weekOf(date);
+
+  useEffect(() => {
+    void s.syncCloudFoods();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const coachTip = useMemo(
+    () =>
+      buildSmartCoachTip({
+        now: new Date(),
+        totals,
+        targets,
+        waterMl: day.waterMl,
+        meals: day.meals,
+        latestReport: s.reports[0] ?? null,
+        plan: s.activePlan,
+        profile: s.profile,
+      }),
+    [totals, targets, day.waterMl, day.meals, s.reports, s.activePlan, s.profile]
+  );
 
   const scan = (a: 'camera' | 'gallery' | 'search') => {
     setQuickAdd(false);
@@ -70,7 +91,7 @@ export default function TodayScreen() {
           </Pressable>
         )}
 
-        <Card style={styles.hero}>
+        <Card variant="glow" style={styles.hero}>
           <CalorieRing
             eatenKcal={totals.kcal}
             goalKcal={targets.kcal}
@@ -86,6 +107,27 @@ export default function TodayScreen() {
             <Icon name="plus" size={20} />
             <Text style={ui.label}>Quick add</Text>
           </Pressable>
+        </Card>
+
+        {/* Smart Biomarker-Aware Daily Coach */}
+        <Card
+          variant="glow"
+          delay={60}
+          style={{ marginTop: 14 }}
+          onPress={() => {
+            haptic.tap();
+            if (coachTip.recipeCraving) s.setPendingRecipeCraving(coachTip.recipeCraving);
+            if (coachTip.route === '/(tabs)/scan') useScanLauncher.getState().request('report');
+            router.navigate(coachTip.route);
+          }}
+          accessibilityLabel={coachTip.title}
+        >
+          <View style={ui.between}>
+            <Pill icon="sparkles" label={coachTip.badge} tone={coachTip.tone} />
+            <Text style={ui.accent}>{coachTip.actionLabel} →</Text>
+          </View>
+          <Text style={[ui.h3, { marginTop: 8 }]}>{coachTip.title}</Text>
+          <Text style={[ui.muted, { marginTop: 4 }]}>{coachTip.body}</Text>
         </Card>
 
         <SectionTitle action="Scan meal" onAction={() => scan('camera')}>Meals</SectionTitle>

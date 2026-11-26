@@ -174,7 +174,7 @@ export interface FoodItem {
   name: string;
   name_hi?: string;
   synonyms: string[];
-  source: 'IFCT2017' | 'USDA' | 'OFF' | 'custom';
+  source: 'IFCT2017' | 'USDA' | 'OFF' | 'custom' | 'ai_gemini';
   per_100g: Nutrients;
   household_units: Record<string, number>; // e.g. { katori: 180, roti: 35 }
   image_key: string;
@@ -189,8 +189,8 @@ export interface MealLogItem {
   grams: number;
   nutrients: Nutrients;
   image_key?: string;
-  /** 'db' = nutrients computed from the food database; 'ai_estimate' = no DB match, AI estimate the user confirmed. */
-  match?: 'db' | 'ai_estimate';
+  /** 'db' = matched in existing food DB; 'ai_catalogued' = newly recognized by Gemini & saved to cloud food DB; 'ai_estimate' = temporary estimate. */
+  match?: 'db' | 'ai_catalogued' | 'ai_estimate';
   confidence?: number;
 }
 
@@ -304,11 +304,13 @@ export interface Recipe {
   cuisine: string;
   diet_tags: DietType[];
   focus: RecipeFocus[];
+  biomarker_benefits?: string[];
+  craving_prompt?: string;
   ingredients: RecipeIngredient[];
   steps: string[];
   why?: string;
   image_key?: string;
-  /** Per-serving nutrients, always computed in code from matched ingredients. */
+  /** Per-serving nutrients, computed from matched ingredients with AI fallback when ingredients aren't in IFCT. */
   per_serving?: Nutrients;
   /** Share of ingredient grams that matched the food database (0–1). */
   nutrition_coverage?: number;

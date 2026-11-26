@@ -7,8 +7,8 @@ import { tokens } from '@/theme/tokens';
 interface CardProps {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
-  /** muted = flat cream chip surface; glass = frosted translucent surface */
-  variant?: 'solid' | 'glass' | 'muted' | 'dark';
+  /** muted = flat cream chip surface; glass = frosted translucent surface; glow = luminous peach-accented glass */
+  variant?: 'solid' | 'glass' | 'glow' | 'muted' | 'dark';
   /** @deprecated use variant="muted" */
   muted?: boolean;
   delay?: number;
@@ -19,21 +19,40 @@ interface CardProps {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+const webGlassStyle =
+  Platform.OS === 'web'
+    ? ({
+        backdropFilter: 'blur(20px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+      } as unknown as ViewStyle)
+    : undefined;
+
 /**
- * Glassy card: translucent white with a bright hairline edge, soft warm shadow and (on iOS/web)
- * a real backdrop blur. Springs on press and fades up on mount (respects Reduce Motion).
+ * Glassy card: translucent frosted surface with luminous hairline edge, warm ambient shadow,
+ * real backdrop blur on iOS & Web, and spring press physics (respects Reduce Motion).
  */
 export function Card({ children, style, variant, muted = false, delay = 0, onPress, accessibilityLabel, accessibilityHint }: CardProps) {
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const v = variant ?? (muted ? 'muted' : 'glass');
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const entering = reducedMotion ? undefined : FadeInDown.duration(420).delay(delay).springify().damping(18);
+  const entering = reducedMotion ? undefined : FadeInDown.duration(400).delay(delay).springify().damping(18);
 
-  const surface = [styles.card, v === 'muted' && styles.muted, v === 'solid' && styles.solid, v === 'glass' && styles.glass, v === 'dark' && styles.dark, style];
+  const isGlassy = v === 'glass' || v === 'glow';
+  const surface = [
+    styles.card,
+    v === 'muted' && styles.muted,
+    v === 'solid' && styles.solid,
+    v === 'glass' && styles.glass,
+    v === 'glow' && styles.glowCard,
+    v === 'dark' && styles.dark,
+    isGlassy && webGlassStyle,
+    style,
+  ];
+
   const blur =
-    v === 'glass' && Platform.OS !== 'android' ? (
-      <BlurView intensity={28} tint="light" style={[StyleSheet.absoluteFill, styles.blurClip]} pointerEvents="none" />
+    isGlassy && Platform.OS === 'ios' ? (
+      <BlurView intensity={32} tint="light" style={[StyleSheet.absoluteFill, styles.blurClip]} pointerEvents="none" />
     ) : null;
 
   if (onPress) {
@@ -42,7 +61,7 @@ export function Card({ children, style, variant, muted = false, delay = 0, onPre
         entering={entering}
         onPress={onPress}
         onPressIn={() => {
-          if (!reducedMotion) scale.value = withSpring(0.98, { damping: 16, stiffness: 320 });
+          if (!reducedMotion) scale.value = withSpring(0.975, { damping: 16, stiffness: 320 });
         }}
         onPressOut={() => {
           if (!reducedMotion) scale.value = withSpring(1, { damping: 16, stiffness: 320 });
@@ -74,9 +93,19 @@ const styles = StyleSheet.create({
   },
   blurClip: { borderRadius: tokens.radius.card, overflow: 'hidden' },
   glass: {
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255,255,255,0.9)' : tokens.color.glass,
+    backgroundColor: Platform.OS === 'android' ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.72)',
     borderWidth: 1,
-    borderColor: tokens.color.glassBorder,
+    borderColor: 'rgba(255,255,255,0.92)',
+  },
+  glowCard: {
+    backgroundColor: Platform.OS === 'android' ? 'rgba(255,250,245,0.95)' : 'rgba(255,249,243,0.78)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(240,154,106,0.45)',
+    shadowColor: '#E8774A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 5,
   },
   solid: { backgroundColor: tokens.color.surface },
   muted: {
@@ -84,7 +113,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     elevation: 0,
   },
-  dark: { backgroundColor: tokens.color.ink },
+  dark: {
+    backgroundColor: tokens.color.ink,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
 });
 
 export function Divider({ style }: { style?: StyleProp<ViewStyle> }) {

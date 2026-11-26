@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import {
   AppSettings,
+  FoodItem,
   HealthBackground,
   HealthPlan,
   InboxItem,
@@ -25,6 +26,7 @@ import { DEFAULT_NOTIFICATION_PREFS } from '@/engine/reminderSchedule';
 import { sumNutrients } from '@/engine/mealAnalysis';
 import { addDays, DateKey, isoAt, todayKey } from '@/lib/dates';
 import { persistStorage, readRaw, removeKey } from '@/lib/storage';
+import { fetchCloudFoods, saveCloudAiRecipes, upsertCloudFood } from '@/lib/cloudCatalog';
 
 export interface DayLog {
   meals: MealLog[];
@@ -95,12 +97,14 @@ interface DataState {
   deviceEventIds: Record<string, string>;
   aiRecipes: { generatedAt: string; recipes: Recipe[] } | null;
   savedRecipeIds: string[];
+  customFoods: FoodItem[];
 }
 
 interface AppState extends DataState {
   /** The day the whole app is showing (dashboard, logging, calendar). Not persisted. */
   selectedDate: DateKey;
   hasHydrated: boolean;
+  pendingRecipeCraving: string | null;
 
   setSelectedDate: (d: DateKey) => void;
   shiftSelectedDate: (days: number) => void;
@@ -135,8 +139,12 @@ interface AppState extends DataState {
   updateNotificationPrefs: (patch: Partial<NotificationPrefs>) => void;
   markInboxRead: (ids: string[]) => void;
   setDeviceEventIds: (map: Record<string, string>) => void;
-  setAiRecipes: (recipes: Recipe[]) => void;
+  setAiRecipes: (recipes: Recipe[], cravingPrompt?: string) => void;
+  appendAiRecipes: (recipes: Recipe[], cravingPrompt?: string) => void;
   toggleSavedRecipe: (id: string) => void;
+  registerCustomFoods: (foods: FoodItem[]) => Promise<number>;
+  syncCloudFoods: () => Promise<void>;
+  setPendingRecipeCraving: (craving: string | null) => void;
 }
 
 const CONSENT_VERSION = '2026-11';
@@ -158,6 +166,7 @@ export function initialData(userId: string): DataState {
     deviceEventIds: {},
     aiRecipes: null,
     savedRecipeIds: [],
+    customFoods: [],
   };
 }
 
@@ -178,6 +187,7 @@ export const useAppStore = create<AppState>()(
       ...initialData('anon'),
       selectedDate: todayKey(),
       hasHydrated: false,
+      pendingRecipeCraving: null,
 
       setSelectedDate: (d) => set({ selectedDate: d }),
       shiftSelectedDate: (n) => set((s) => ({ selectedDate: addDays(s.selectedDate, n) })),
@@ -212,7 +222,8 @@ export const useAppStore = create<AppState>()(
       deleteMeal: (date, mealId) => set((s) => ({ days: withDay(s.days, date, (day) => ({ ...day, meals: day.meals.filter((m) => m.id !== mealId) })) })),
 
       logFood: (foodId, grams, slot, date) => {
-        const food = ALL_FOODS.find((f) => f.id === foodId) ?? ALL_FOODS[0];
+        const catalog = [...get().customFoods, ...ALL_FOODS];
+        const food = catalog.find((f) => f.id === foodId) ?? ALL_FOODS[0];
         const item: MealLogItem = { food_id: food.id, name: food.name, qty: grams, unit: 'g', grams, nutrients: computeNutrientsForGrams(food, grams), image_key: food.image_key, match: 'db' };
         get().logMeal([item], slot, 'search', { date });
       },
@@ -331,8 +342,47 @@ export const useAppStore = create<AppState>()(
       updateNotificationPrefs: (patch) => set((s) => ({ notificationPrefs: { ...s.notificationPrefs, ...patch } })),
       markInboxRead: (ids) => set((s) => ({ readInboxIds: [...new Set([...s.readInboxIds, ...ids])].slice(-400) })),
       setDeviceEventIds: (map) => set({ deviceEventIds: map }),
-      setAiRecipes: (recipes) => set({ aiRecipes: { generatedAt: new Date().toISOString(), recipes } }),
+      setAiRecipes: (recipes, cravingPrompt) => {
+        set({ aiRecipes: { generatedAt: new Date().toISOString(), recipes } });
+        void saveCloudAiRecipes(recipes, cravingPrompt);
+      },
+      appendAiRecipes: (recipes, cravingPrompt) => {
+        set((s) => {
+          const existing = s.aiRecipes?.recipes ?? [];
+          const byName = new Set(recipes.map((r) => r.name.toLowerCase()));
+          const merged = [...recipes, ...existing.filter((r) => !byName.has(r.name.toLowerCase()))].slice(0, 24);
+          return { aiRecipes: { generatedAt: new Date().toISOString(), recipes: merged } };
+        });
+        void saveCloudAiRecipes(recipes, cravingPrompt);
+      },
       toggleSavedRecipe: (id) => set((s) => ({ savedRecipeIds: s.savedRecipeIds.includes(id) ? s.savedRecipeIds.filter((x) => x !== id) : [...s.savedRecipeIds, id] })),
+      registerCustomFoods: async (foods) => {
+        if (foods.length === 0) return 0;
+        let savedCloud = 0;
+        set((s) => {
+          const existingIds = new Set(s.customFoods.map((f) => f.id));
+          const fresh = foods.filter((f) => !existingIds.has(f.id));
+          return { customFoods: [...fresh, ...s.customFoods].slice(0, 300) };
+        });
+        for (const f of foods) {
+          const res = await upsertCloudFood(f);
+          if (res.savedToCloud) savedCloud++;
+        }
+        return savedCloud;
+      },
+      syncCloudFoods: async () => {
+        const cloud = await fetchCloudFoods();
+        if (cloud.length === 0) return;
+        set((s) => {
+          const map = new Map<string, FoodItem>();
+          for (const f of s.customFoods) map.set(f.id, f);
+          for (const f of cloud) {
+            if (!ALL_FOODS.some((a) => a.id === f.id)) map.set(f.id, f);
+          }
+          return { customFoods: Array.from(map.values()).slice(0, 300) };
+        });
+      },
+      setPendingRecipeCraving: (craving) => set({ pendingRecipeCraving: craving }),
     }),
     {
       name: 'svastha-data-anon',
@@ -355,6 +405,7 @@ export const useAppStore = create<AppState>()(
         deviceEventIds: s.deviceEventIds,
         aiRecipes: s.aiRecipes,
         savedRecipeIds: s.savedRecipeIds,
+        customFoods: s.customFoods,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<DataState>;

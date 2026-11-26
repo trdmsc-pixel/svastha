@@ -312,6 +312,34 @@ export function matchFoodByQuery(query: string, catalog: FoodItem[] = ALL_FOODS)
   return searchFoods(query, catalog, 1)[0] ?? null;
 }
 
+/**
+ * Strict matcher used by the Gemini Vision meal scanner so an unrecognized dish
+ * (e.g. "Steamed Veg Momos", "Avocado Toast", "Cold Coffee") NEVER falsely matches
+ * an unrelated staple in the catalogue. Requires exact name/synonym match or score >= 82.
+ */
+export function matchFoodStrict(query: string, catalog: FoodItem[] = ALL_FOODS): FoodItem | null {
+  const q = normalise(query);
+  if (!q) return null;
+  const qTokens = q.split(' ').filter((t) => t.length > 1);
+  let best: { item: FoodItem; score: number } | null = null;
+  for (const item of catalog) {
+    const haystack = [item.name, item.name_hi ?? '', ...item.synonyms].map(normalise).filter(Boolean);
+    for (const h of haystack) {
+      if (h === q) return item;
+      const hTokens = h.split(' ').filter((t) => t.length > 1);
+      if (qTokens.length > 0 && hTokens.length > 0) {
+        const overlap = qTokens.filter((t) => hTokens.includes(t)).length;
+        const jaccard = overlap / new Set([...qTokens, ...hTokens]).size;
+        const score = Math.round(jaccard * 100);
+        if (score >= 82 && (!best || score > best.score)) {
+          best = { item, score };
+        }
+      }
+    }
+  }
+  return best?.item ?? null;
+}
+
 /** Grams for `qty` of a household unit, falling back to a sensible default serving. */
 export function gramsForUnit(food: FoodItem, unit: string, qty: number): number | null {
   const key = unit.toLowerCase().replace(/s$/, '');
