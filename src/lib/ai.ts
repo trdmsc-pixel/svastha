@@ -15,41 +15,14 @@ function apiBase(): string | null {
 }
 
 export function aiTransportLabel(): string {
+  if (apiBase()) return 'Svastha AI (Fast Vercel API)';
   if (isSupabaseConfigured) return 'Supabase Edge Functions · Mumbai';
-  if (apiBase()) return 'Svastha AI service';
   return 'Not connected';
 }
 
-async function viaSupabase<T>(endpoint: AiEndpoint, body: unknown): Promise<AiResult<T> | null> {
-  if (!isSupabaseConfigured) return null;
-  if (endpoint === 'suggest-recipes') return null; // Handled by /api/suggest-recipes
-  const { data: sess } = await supabase.auth.getSession();
-  if (!sess.session) return null;
-  const { data, error } = await supabase.functions.invoke(endpoint, { body: body as Record<string, unknown> });
-  if (error) {
-    const status = (error as { context?: { status?: number } }).context?.status;
-    if (status === 429) return { ok: false, reason: 'rate_limited', message: 'Daily AI limit reached — try again tomorrow.' };
-    if (status === 413) return { ok: false, reason: 'too_large', message: 'That file is too large to analyse.' };
-    return { ok: false, reason: 'error', message: 'The AI service had a problem. Please try again.' };
-  }
-  return { ok: true, data: data as T, via: 'supabase' };
-}
-
-export async function callAi<T>(endpoint: AiEndpoint, body: unknown, timeoutMs = 75_000): Promise<AiResult<T>> {
-  let supaErr: AiResult<T> | null = null;
-  try {
-    const s = await viaSupabase<T>(endpoint, body);
-    if (s?.ok) return s;
-    if (s && (s.reason === 'rate_limited' || s.reason === 'too_large')) return s;
-    supaErr = s;
-  } catch {
-    // fall through to the API route
-  }
-
+async function viaApi<T>(endpoint: AiEndpoint, body: unknown, timeoutMs: number): Promise<AiResult<T> | null> {
   const base = apiBase();
-  if (!base) {
-    return supaErr ?? { ok: false, reason: 'not_configured', message: 'AI analysis isn’t connected in this build.' };
-  }
+  if (!base) return null;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -74,4 +47,42 @@ export async function callAi<T>(endpoint: AiEndpoint, body: unknown, timeoutMs =
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function viaSupabase<T>(endpoint: AiEndpoint, body: unknown): Promise<AiResult<T> | null> {
+  if (!isSupabaseConfigured) return null;
+  if (endpoint === 'suggest-recipes') return null;
+  const { data: sess } = await supabase.auth.getSession();
+  if (!sess.session) return null;
+  const { data, error } = await supabase.functions.invoke(endpoint, { body: body as Record<string, unknown> });
+  if (error) {
+    const status = (error as { context?: { status?: number } }).context?.status;
+    if (status === 429) return { ok: false, reason: 'rate_limited', message: 'Daily AI limit reached — try again tomorrow.' };
+    if (status === 413) return { ok: false, reason: 'too_large', message: 'That file is too large to analyse.' };
+    return { ok: false, reason: 'error', message: 'The AI service had a problem. Please try again.' };
+  }
+  return { ok: true, data: data as T, via: 'supabase' };
+}
+
+/**
+ * Calls Vercel `/api/*` FIRST whenever available (eliminates 5-15s Supabase Edge Function
+ * cold-start / fallback delay on web and configured mobile builds), falling back to Supabase
+ * Edge Functions only if `/api/*` is unavailable.
+ */
+export async function callAi<T>(endpoint: AiEndpoint, body: unknown, timeoutMs = 45_000): Promise<AiResult<T>> {
+  const apiRes = await viaApi<T>(endpoint, body, timeoutMs);
+  if (apiRes?.ok) return apiRes;
+  if (apiRes && (apiRes.reason === 'rate_limited' || apiRes.reason === 'too_large' || apiRes.reason === 'offline')) {
+    return apiRes;
+  }
+
+  try {
+    const supaRes = await viaSupabase<T>(endpoint, body);
+    if (supaRes?.ok) return supaRes;
+    if (supaRes) return supaRes;
+  } catch {
+    // keep apiRes error
+  }
+
+  return apiRes ?? { ok: false, reason: 'not_configured', message: 'AI analysis isn’t connected in this build.' };
 }

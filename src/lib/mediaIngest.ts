@@ -50,8 +50,8 @@ export async function pickImages(multiple: boolean, limit = 6): Promise<IngestRe
   return { ok: true, value: res.assets.slice(0, limit) };
 }
 
-export async function toEphemeral(asset: ImagePicker.ImagePickerAsset): Promise<EphemeralImagePayload> {
-  return prepareEphemeralImageForAI(asset.uri, asset.width, asset.height);
+export async function toEphemeral(asset: ImagePicker.ImagePickerAsset, opts?: { maxEdge?: number; quality?: number }): Promise<EphemeralImagePayload> {
+  return prepareEphemeralImageForAI(asset.uri, asset.width, asset.height, opts);
 }
 
 export interface EphemeralPdf {

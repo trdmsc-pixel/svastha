@@ -40,19 +40,21 @@ export async function deleteTempFile(uri: string | null | undefined): Promise<vo
  *   are deleted from the device immediately
  * - discard() clears the in-memory reference once the AI response arrives
  */
-export async function prepareEphemeralImageForAI(uri: string, srcWidth?: number, srcHeight?: number): Promise<EphemeralImagePayload> {
+export async function prepareEphemeralImageForAI(uri: string, srcWidth?: number, srcHeight?: number, opts: { maxEdge?: number; quality?: number } = {}): Promise<EphemeralImagePayload> {
+  const maxEdge = opts.maxEdge ?? MAX_EDGE;
+  const quality = opts.quality ?? 0.7;
   const actions: ImageManipulator.Action[] = [];
   if (srcWidth && srcHeight) {
     const longEdge = Math.max(srcWidth, srcHeight);
-    if (longEdge > MAX_EDGE) {
-      actions.push({ resize: srcWidth >= srcHeight ? { width: MAX_EDGE } : { height: MAX_EDGE } });
+    if (longEdge > maxEdge) {
+      actions.push({ resize: srcWidth >= srcHeight ? { width: maxEdge } : { height: maxEdge } });
     }
   } else {
-    actions.push({ resize: { width: MAX_EDGE } });
+    actions.push({ resize: { width: maxEdge } });
   }
 
   const result = await ImageManipulator.manipulateAsync(uri, actions, {
-    compress: 0.7,
+    compress: quality,
     format: ImageManipulator.SaveFormat.JPEG,
     base64: true,
   });

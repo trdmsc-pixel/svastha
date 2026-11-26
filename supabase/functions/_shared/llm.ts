@@ -10,9 +10,12 @@ export interface LlmCallOptions<T> {
   imagesBase64?: Array<{ mimeType: string; data: string }>;
   schema: z.ZodType<T>;
   useVision?: boolean;
+  fast?: boolean;
+  maxOutputTokens?: number;
 }
 
-const GEMINI_CANDIDATES = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const FAST_GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+const ACCURATE_GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
 async function fetchGeminiFlashModels(apiKey: string): Promise<string[]> {
   try {
@@ -45,8 +48,10 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
     throw new Error('GEMINI_API_KEY secret is not configured in Supabase Edge Function secrets.');
   }
 
+  const tier = opts.fast === false ? 'accurate' : 'fast';
   const envModel = opts.useVision ? Deno.env.get('LLM_VISION_MODEL') : Deno.env.get('LLM_TEXT_MODEL');
-  const candidateModels = envModel ? [envModel] : GEMINI_CANDIDATES;
+  const baseList = tier === 'fast' ? FAST_GEMINI_MODELS : ACCURATE_GEMINI_MODELS;
+  const candidateModels = envModel ? [envModel, ...baseList.filter((m) => m !== envModel)] : baseList;
 
   const invokeWithModel = async (model: string, retryHint?: string): Promise<string> => {
     const promptText = retryHint
@@ -58,6 +63,15 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
       parts.push({ inline_data: { mime_type: img.mimeType, data: img.data } });
     }
 
+    const generationConfig: Record<string, unknown> = {
+      responseMimeType: 'application/json',
+      temperature: 0.2,
+      maxOutputTokens: opts.maxOutputTokens ?? (tier === 'fast' ? 1600 : 4096),
+    };
+    if (/^gemini-2\.5-flash/i.test(model)) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
@@ -66,7 +80,7 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
         body: JSON.stringify({
           system_instruction: { parts: [{ text: opts.systemPrompt }] },
           contents: [{ role: 'user', parts }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+          generationConfig,
         }),
       }
     );

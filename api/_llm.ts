@@ -11,7 +11,12 @@ export interface VercelResponseLike {
   json: (data: unknown) => void;
 }
 
-const GEMINI_CANDIDATES = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+// Live, ultra-fast Gemini Flash models ordered for minimum latency (no dead 404 model round-trips).
+const FAST_GEMINI_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+const ACCURATE_GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+
+// Warm serverless instance cache so repeat calls skip fallback probing
+let cachedModelByTier: Partial<Record<'fast' | 'accurate', string>> = {};
 
 async function fetchGeminiFlashModels(apiKey: string): Promise<string[]> {
   try {
@@ -46,6 +51,9 @@ export async function callStructuredLLM<T>(opts: {
   imagesBase64?: Array<{ mimeType: string; data: string }>;
   schema: z.ZodType<T>;
   useVision?: boolean;
+  /** fast=true (default) uses flash-lite first and disables thinking tokens for ~2-4s latency. */
+  fast?: boolean;
+  maxOutputTokens?: number;
 }): Promise<{ data: T; model: string }> {
   const apiKey = (process.env.GEMINI_API_KEY || process.env.LLM_API_KEY || '').trim();
   if (!apiKey) {
@@ -54,8 +62,15 @@ export async function callStructuredLLM<T>(opts: {
     throw err;
   }
 
+  const tier: 'fast' | 'accurate' = opts.fast === false ? 'accurate' : 'fast';
   const envModel = opts.useVision ? process.env.LLM_VISION_MODEL : process.env.LLM_TEXT_MODEL;
-  const candidateModels = envModel ? [envModel] : GEMINI_CANDIDATES;
+  const baseList = tier === 'fast' ? FAST_GEMINI_MODELS : ACCURATE_GEMINI_MODELS;
+  const cached = cachedModelByTier[tier];
+  const candidateModels = envModel
+    ? [envModel, ...baseList.filter((m) => m !== envModel)]
+    : cached
+    ? [cached, ...baseList.filter((m) => m !== cached)]
+    : baseList;
 
   const invokeWithModel = async (model: string, retryHint?: string): Promise<string> => {
     const promptText = retryHint
@@ -67,6 +82,17 @@ export async function callStructuredLLM<T>(opts: {
       parts.push({ inline_data: { mime_type: img.mimeType, data: img.data } });
     }
 
+    const generationConfig: Record<string, unknown> = {
+      responseMimeType: 'application/json',
+      temperature: 0.2,
+      maxOutputTokens: opts.maxOutputTokens ?? (tier === 'fast' ? 1600 : 4096),
+    };
+
+    // Disabling hidden thinking tokens on Gemini 2.5 Flash cuts latency from ~20s to ~2-3s!
+    if (/^gemini-2\.5-flash/i.test(model)) {
+      generationConfig.thinkingConfig = { thinkingBudget: 0 };
+    }
+
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
@@ -75,7 +101,7 @@ export async function callStructuredLLM<T>(opts: {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: opts.systemPrompt }] },
           contents: [{ role: 'user', parts }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+          generationConfig,
         }),
       }
     );
@@ -98,10 +124,12 @@ export async function callStructuredLLM<T>(opts: {
         let raw = await invokeWithModel(model);
         try {
           const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
+          cachedModelByTier[tier] = model;
           return { data: parsed, model };
         } catch (zodErr) {
           raw = await invokeWithModel(model, String(zodErr));
           const parsed = opts.schema.parse(JSON.parse(extractJsonString(raw)));
+          cachedModelByTier[tier] = model;
           return { data: parsed, model };
         }
       } catch (err) {

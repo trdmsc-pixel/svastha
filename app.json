@@ -6,10 +6,17 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "backgroundColor": "#F6F2ED",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2F2B28"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.svastha.app",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "NSCameraUsageDescription": "Svastha uses the camera to scan meals and lab reports. Photos are processed in memory and never stored.",
         "NSPhotoLibraryUsageDescription": "Svastha accesses photos you pick to scan a meal or lab report.",
@@ -19,8 +26,10 @@
     },
     "android": {
       "package": "com.svastha.app",
+      "icon": "./assets/icon.png",
       "adaptiveIcon": {
-        "backgroundColor": "#F6F2ED"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2F2B28"
       },
       "permissions": [
         "CAMERA",

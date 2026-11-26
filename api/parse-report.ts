@@ -98,6 +98,8 @@ export default async function handler(req: VercelRequestLike, res: VercelRespons
       imagesBase64: useVision ? attachments : undefined,
       schema: ParseReportSchema,
       useVision,
+      fast: false,
+      maxOutputTokens: 4096,
     });
     body = {};
     return res.status(200).json({ parsed: data, model, prompt_version: 'parse-report-v2' });

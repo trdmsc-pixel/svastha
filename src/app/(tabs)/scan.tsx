@@ -54,7 +54,6 @@ export default function ScanScreen() {
   const processAiMealResponse = useCallback(async (analysis: AiMealAnalysis) => {
     setStep(2);
     // Refresh cloud food catalog first so existing AI-catalogued items are reused
-    await useAppStore.getState().syncCloudFoods();
     const freshCatalog = [...useAppStore.getState().customFoods, ...ALL_FOODS];
     const items = mapAiMealToDraft(analysis, freshCatalog);
 
@@ -99,7 +98,7 @@ export default function ScanScreen() {
     }
     setPhase('working');
     setStep(0);
-    const img = await toEphemeral(picked.value);
+    const img = await toEphemeral(picked.value, { maxEdge: 768, quality: 0.62 });
     setStep(1);
     if (!useAppStore.getState().settings.aiMealPhotoAnalysis) {
       img.discard();
@@ -108,11 +107,15 @@ export default function ScanScreen() {
       setNote('AI photo analysis is off in Settings. Search to add items.');
       return;
     }
-    const res = await callAi<{ analysis: AiMealAnalysis }>('analyse-meal', {
-      imageBase64: img.base64,
-      mimeType: img.mimeType,
-      dietType: useAppStore.getState().profile.diet_type,
-    });
+    // Run cloud catalog sync in parallel with Gemini Vision to save an entire round-trip
+    const [res] = await Promise.all([
+      callAi<{ analysis: AiMealAnalysis }>('analyse-meal', {
+        imageBase64: img.base64,
+        mimeType: img.mimeType,
+        dietType: useAppStore.getState().profile.diet_type,
+      }),
+      useAppStore.getState().syncCloudFoods(),
+    ]);
     img.discard();
     if (!res.ok) {
       setPhase('review');
@@ -158,7 +161,7 @@ export default function ScanScreen() {
         : await pickImages(true, 6);
       if (!r.ok) { if (!r.cancelled) { setNoteTone('watch'); setNote(r.error); } return; }
       setPhase('working'); setStep(0);
-      const pages = await Promise.all(r.value.map(toEphemeral));
+      const pages = await Promise.all(r.value.map((asset) => toEphemeral(asset)));
       setStep(1);
       body = { pagesBase64: pages.map((p) => ({ mimeType: p.mimeType, data: p.base64 })) };
       discard = () => pages.forEach((p) => p.discard());
