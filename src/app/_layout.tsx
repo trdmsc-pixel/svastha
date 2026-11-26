@@ -41,8 +41,9 @@ function useRouteGuard(ready: boolean) {
   const onboarded = useAppStore((s) => s.onboardingComplete);
   useEffect(() => {
     if (!ready) return;
-    const inAuth = segments[0] === '(auth)';
-    const screen = segments[1] as string | undefined;
+    const seg = segments as string[];
+    const inAuth = seg[0] === '(auth)';
+    const screen = seg[1];
     if (!session) {
       if (!inAuth || screen === 'profile-setup') router.replace('/(auth)/welcome');
     } else if (!onboarded) {
@@ -87,10 +88,8 @@ export default function RootLayout() {
                 <Stack.Screen name="(auth)/profile-setup" />
                 <Stack.Screen name="calendar" />
                 <Stack.Screen name="notifications" />
-                <Stack.Screen name="settings/notifications" />
                 <Stack.Screen name="routine" />
                 <Stack.Screen name="report/chat" />
-                <Stack.Screen name="recipe/[id]" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
               </Stack>
               {!ready && (
                 <View style={[StyleSheet.absoluteFill, styles.splash]}>
