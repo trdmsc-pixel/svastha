@@ -11,6 +11,18 @@ export interface VercelResponseLike {
   json: (data: unknown) => void;
 }
 
+const GROQ_TEXT_CANDIDATES = [
+  'llama-3.1-8b-instant',
+  'openai/gpt-oss-120b',
+  'llama-3.3-70b-versatile',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+];
+
+const GROQ_VISION_CANDIDATES = [
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'meta-llama/llama-4-maverick-17b-128e-instruct',
+];
+
 export async function callStructuredLLM<T>(opts: {
   systemPrompt: string;
   userText: string;
@@ -30,24 +42,18 @@ export async function callStructuredLLM<T>(opts: {
     explicitProvider ||
     (apiKey.startsWith('gsk_') ? 'groq' : apiKey.startsWith('AIza') ? 'gemini' : 'openai');
 
-  const defaultTextModel =
-    provider === 'groq'
-      ? 'llama-3.3-70b-versatile'
+  const envModel = opts.useVision ? process.env.LLM_VISION_MODEL : process.env.LLM_TEXT_MODEL;
+  const candidateModels = envModel
+    ? [envModel]
+    : provider === 'groq'
+      ? opts.useVision
+        ? GROQ_VISION_CANDIDATES
+        : GROQ_TEXT_CANDIDATES
       : provider === 'gemini'
-        ? 'gemini-2.5-flash'
-        : 'gpt-4o-mini';
-  const defaultVisionModel =
-    provider === 'groq'
-      ? 'meta-llama/llama-4-scout-17b-16e-instruct'
-      : provider === 'gemini'
-        ? 'gemini-2.5-flash'
-        : 'gpt-4o-mini';
+        ? ['gemini-2.5-flash']
+        : ['gpt-4o-mini'];
 
-  const model = opts.useVision
-    ? process.env.LLM_VISION_MODEL ?? defaultVisionModel
-    : process.env.LLM_TEXT_MODEL ?? defaultTextModel;
-
-  const invokeOnce = async (retryHint?: string): Promise<string> => {
+  const invokeWithModel = async (model: string, retryHint?: string): Promise<string> => {
     const promptText = retryHint
       ? `${opts.userText}\n\nPrevious JSON failed schema validation: ${retryHint}. Return ONLY valid JSON.`
       : opts.userText;
@@ -71,7 +77,9 @@ export async function callStructuredLLM<T>(opts: {
       );
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        throw new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 200)}`);
+        const e = new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 200)}`);
+        (e as Error & { status?: number }).status = res.status;
+        throw e;
       }
       const json = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
       return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
@@ -111,21 +119,33 @@ export async function callStructuredLLM<T>(opts: {
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
-      throw new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 200)}`);
+      const e = new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 200)}`);
+      (e as Error & { status?: number }).status = res.status;
+      throw e;
     }
     const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
     return json?.choices?.[0]?.message?.content ?? '{}';
   };
 
-  let raw = await invokeOnce();
-  try {
-    const parsed = opts.schema.parse(JSON.parse(raw));
-    return { data: parsed, model };
-  } catch (err) {
-    raw = await invokeOnce(String(err));
-    const parsed = opts.schema.parse(JSON.parse(raw));
-    return { data: parsed, model };
+  let lastErr: unknown;
+  for (const model of candidateModels) {
+    try {
+      let raw = await invokeWithModel(model);
+      try {
+        const parsed = opts.schema.parse(JSON.parse(raw));
+        return { data: parsed, model };
+      } catch (zodErr) {
+        raw = await invokeWithModel(model, String(zodErr));
+        const parsed = opts.schema.parse(JSON.parse(raw));
+        return { data: parsed, model };
+      }
+    } catch (err) {
+      lastErr = err;
+      if ((err as { status?: number }).status === 404) continue;
+      throw err;
+    }
   }
+  throw lastErr;
 }
 
 export function handleLlmError(res: VercelResponseLike, err: unknown) {
