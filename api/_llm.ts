@@ -70,13 +70,12 @@ export async function callStructuredLLM<T>(opts: {
   schema: z.ZodType<T>;
   useVision?: boolean;
 }): Promise<{ data: T; model: string }> {
-  const rawKey = (process.env.LLM_API_KEY ?? '').trim();
-  if (!rawKey) {
+  const apiKey = (process.env.LLM_API_KEY ?? '').trim();
+  if (!apiKey) {
     const err = new Error('LLM_API_KEY is not configured on the server.');
     (err as Error & { code?: string }).code = 'not_configured';
     throw err;
   }
-  const apiKey = rawKey.replace(/^LLM_(\d+)_(.+)$/, 'LLM|$1|$2');
 
   const explicitProvider = process.env.LLM_PROVIDER?.toLowerCase();
   const provider =
@@ -140,12 +139,48 @@ export async function callStructuredLLM<T>(opts: {
       return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
     }
 
+    if (provider === 'meta') {
+      const content: Array<Record<string, unknown>> = [
+        { type: 'input_text', text: `${opts.systemPrompt}\n\nReturn ONLY valid JSON.\n\n${promptText}` },
+      ];
+      for (const img of opts.imagesBase64 ?? []) {
+        content.push({
+          type: 'input_image',
+          image_url: `data:${img.mimeType};base64,${img.data}`,
+        });
+      }
+      const res = await fetch('https://api.meta.ai/v1/responses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          input: [{ role: 'user', content }],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        const e = new Error(`LLM HTTP ${res.status} (${provider}/${model}): ${errText.slice(0, 220)}`);
+        (e as Error & { status?: number }).status = res.status;
+        throw e;
+      }
+      const json = (await res.json()) as {
+        output_text?: string;
+        output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+      };
+      if (json.output_text) return json.output_text;
+      const msg = json.output?.find((o) => o.type === 'message');
+      const txt = msg?.content?.find((c) => c.type === 'output_text' || typeof c.text === 'string')?.text;
+      return txt ?? '{}';
+    }
+
     const endpoint =
-      provider === 'meta'
-        ? 'https://api.llama.com/compat/v1/chat/completions'
-        : provider === 'groq'
-          ? 'https://api.groq.com/openai/v1/chat/completions'
-          : 'https://api.openai.com/v1/chat/completions';
+      provider === 'groq'
+        ? 'https://api.groq.com/openai/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
 
     const userContent: unknown =
       opts.imagesBase64 && opts.imagesBase64.length > 0

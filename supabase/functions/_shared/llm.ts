@@ -65,11 +65,10 @@ function extractJsonString(raw: string): string {
 }
 
 export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ data: T; model: string }> {
-  const rawKey = (Deno.env.get('LLM_API_KEY') ?? '').trim();
-  if (!rawKey) {
+  const apiKey = (Deno.env.get('LLM_API_KEY') ?? '').trim();
+  if (!apiKey) {
     throw new Error('LLM_API_KEY secret is not configured in Supabase Edge Function secrets.');
   }
-  const apiKey = rawKey.replace(/^LLM_(\d+)_(.+)$/, 'LLM|$1|$2');
 
   const explicitProvider = Deno.env.get('LLM_PROVIDER')?.toLowerCase();
   const provider =
@@ -132,12 +131,45 @@ export async function callStructuredLLM<T>(opts: LlmCallOptions<T>): Promise<{ d
       return json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
     }
 
+    if (provider === 'meta') {
+      const content: Array<Record<string, unknown>> = [
+        { type: 'input_text', text: `${opts.systemPrompt}\n\nReturn ONLY valid JSON.\n\n${promptText}` },
+      ];
+      for (const img of opts.imagesBase64 ?? []) {
+        content.push({
+          type: 'input_image',
+          image_url: `data:${img.mimeType};base64,${img.data}`,
+        });
+      }
+      const res = await fetch('https://api.meta.ai/v1/responses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          input: [{ role: 'user', content }],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const e = new Error(`LLM HTTP ${res.status}`);
+        (e as Error & { status?: number }).status = res.status;
+        throw e;
+      }
+      const json = await res.json();
+      if (json.output_text) return json.output_text;
+      const msg = (json.output as Array<{ type?: string; content?: Array<{ text?: string }> }> | undefined)?.find(
+        (o) => o.type === 'message'
+      );
+      return msg?.content?.[0]?.text ?? '{}';
+    }
+
     const endpoint =
-      provider === 'meta'
-        ? 'https://api.llama.com/compat/v1/chat/completions'
-        : provider === 'groq'
-          ? 'https://api.groq.com/openai/v1/chat/completions'
-          : 'https://api.openai.com/v1/chat/completions';
+      provider === 'groq'
+        ? 'https://api.groq.com/openai/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
 
     const userContent: unknown =
       opts.imagesBase64 && opts.imagesBase64.length > 0
