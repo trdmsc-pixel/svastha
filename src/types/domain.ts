@@ -41,6 +41,8 @@ export interface HealthBackground {
   alcohol_units_week: number;
   pregnant: boolean;
   under_medical_supervision?: boolean;
+  /** Prescribed medicines the user takes (names only, free text). Never dosing advice. */
+  medications?: string[];
   notes?: string;
 }
 
@@ -187,10 +189,15 @@ export interface MealLogItem {
   grams: number;
   nutrients: Nutrients;
   image_key?: string;
+  /** 'db' = nutrients computed from the food database; 'ai_estimate' = no DB match, AI estimate the user confirmed. */
+  match?: 'db' | 'ai_estimate';
+  confidence?: number;
 }
 
 export interface MealLog {
   id: string;
+  /** Local day key (YYYY-MM-DD) the meal belongs to — keeps the calendar and dashboard in sync. */
+  date?: string;
   eaten_at: string;
   slot: MealSlot;
   source: MealSource;
@@ -264,4 +271,80 @@ export interface PlanTask {
   calendar_sync: boolean;
   device_event_id?: string | null;
   status_today?: TaskLogStatus;
+}
+
+export interface RecipeIngredient {
+  food_id?: string;
+  name: string;
+  grams: number;
+}
+
+export type RecipeFocus =
+  | 'liver'
+  | 'hdl'
+  | 'ldl'
+  | 'triglycerides'
+  | 'glucose'
+  | 'iron'
+  | 'b12'
+  | 'vitamin_d'
+  | 'thyroid'
+  | 'kidney'
+  | 'uric_acid'
+  | 'protein'
+  | 'fibre'
+  | 'weight';
+
+export interface Recipe {
+  id: string;
+  name: string;
+  minutes: number;
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  slot: MealSlot;
+  cuisine: string;
+  diet_tags: DietType[];
+  focus: RecipeFocus[];
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  why?: string;
+  image_key?: string;
+  /** Per-serving nutrients, always computed in code from matched ingredients. */
+  per_serving?: Nutrients;
+  /** Share of ingredient grams that matched the food database (0–1). */
+  nutrition_coverage?: number;
+  source: 'curated' | 'ai';
+}
+
+export type ReminderCategory = 'water' | 'meals' | 'medicines' | 'routine' | 'retest' | 'insights';
+
+export interface NotificationPrefs {
+  enabled: boolean;
+  categories: Record<ReminderCategory, boolean>;
+  quietStart: string; // HH:mm
+  quietEnd: string; // HH:mm
+  dailyCap: number;
+  waterIntervalMin: number;
+  mealTimes: Record<MealSlot, string>;
+  medicineTimes: string[];
+  weeklySummary: boolean;
+  sound: boolean;
+}
+
+export interface AppSettings {
+  /** "Suggest amazing recipes with AI using my lab report + profile" */
+  aiRecipeSuggestions: boolean;
+  /** Use AI vision to identify foods & portions from meal photos */
+  aiMealPhotoAnalysis: boolean;
+  calendarSyncEnabled: boolean;
+  showDeviceCalendarEvents: boolean;
+  haptics: boolean;
+}
+
+export interface InboxItem {
+  id: string;
+  category: ReminderCategory;
+  title: string;
+  body: string;
+  at: string; // ISO
+  route?: string;
 }

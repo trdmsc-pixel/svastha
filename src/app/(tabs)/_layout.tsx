@@ -1,38 +1,21 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Platform, StyleSheet, View } from 'react-native';
+import { Tabs, router } from 'expo-router';
+import { BlurView } from 'expo-blur';
 import { tokens } from '@/theme/tokens';
+import { Icon, IconName } from '@/components/Icon';
+import { useScanLauncher } from '@/store/useScanLauncher';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
-function TabIcon({
-  name,
-  activeName,
-  focused,
-  label,
-}: {
-  name: IoniconName;
-  activeName: IoniconName;
-  focused: boolean;
-  label: string;
-}) {
+function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
   return (
-    <View style={styles.tabItem} accessibilityLabel={label}>
-      <Ionicons
-        name={focused ? activeName : name}
-        size={22}
-        color={focused ? tokens.color.white : '#9A958E'}
-      />
+    <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+      <Icon name={name} size={22} color={focused ? tokens.color.white : '#A8A29B'} strokeWidth={focused ? 2.4 : 2} />
       {focused && <View style={styles.activeDot} />}
     </View>
   );
 }
 
-/**
- * Dark charcoal 5-slot floating bottom tab bar with raised peach squircle Scan button
- * (charcoal icon on peach = 6.43:1 WCAG AA).
- */
+/** Frosted charcoal floating tab bar; the glowing Scan button opens the phone camera immediately. */
 export default function TabsLayout() {
   return (
     <Tabs
@@ -40,118 +23,65 @@ export default function TabsLayout() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: styles.tabBar,
+        tabBarBackground: () => (Platform.OS === 'ios' ? <BlurView intensity={50} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 34, overflow: 'hidden' }]} /> : null),
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Today',
-          tabBarAccessibilityLabel: 'Today tab',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="home-outline" activeName="home" focused={focused} label="Today" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="health"
-        options={{
-          title: 'Health',
-          tabBarAccessibilityLabel: 'Health reports tab',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              name="document-text-outline"
-              activeName="document-text"
-              focused={focused}
-              label="Health"
-            />
-          ),
-        }}
-      />
+      <Tabs.Screen name="index" options={{ tabBarAccessibilityLabel: 'Today', tabBarIcon: ({ focused }) => <TabIcon name="home" focused={focused} /> }} />
+      <Tabs.Screen name="health" options={{ tabBarAccessibilityLabel: 'Health reports', tabBarIcon: ({ focused }) => <TabIcon name="report" focused={focused} /> }} />
       <Tabs.Screen
         name="scan"
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            useScanLauncher.getState().request('camera');
+            router.navigate('/(tabs)/scan');
+          },
+        }}
         options={{
-          title: 'Scan',
-          tabBarAccessibilityLabel: 'Scan meal or lab report',
+          tabBarAccessibilityLabel: 'Scan a meal with the camera',
           tabBarIcon: () => (
-            <View style={styles.scanButton} accessible accessibilityLabel="Scan">
-              <Ionicons name="scan-outline" size={24} color={tokens.color.onAccent} />
+            <View style={styles.scanButton}>
+              <Icon name="camera" size={24} color={tokens.color.onAccent} strokeWidth={2.2} />
             </View>
           ),
         }}
       />
-      <Tabs.Screen
-        name="plan"
-        options={{
-          title: 'Plan',
-          tabBarAccessibilityLabel: 'Health plan tab',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="star-outline" activeName="star" focused={focused} label="Plan" />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="me"
-        options={{
-          title: 'Me',
-          tabBarAccessibilityLabel: 'Profile and settings tab',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              name="settings-outline"
-              activeName="settings"
-              focused={focused}
-              label="Me"
-            />
-          ),
-        }}
-      />
+      <Tabs.Screen name="plan" options={{ tabBarAccessibilityLabel: 'Plan and recipes', tabBarIcon: ({ focused }) => <TabIcon name="star" focused={focused} /> }} />
+      <Tabs.Screen name="me" options={{ tabBarAccessibilityLabel: 'Profile and settings', tabBarIcon: ({ focused }) => <TabIcon name="user" focused={focused} /> }} />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: tokens.color.ink,
-    height: 70,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(32,30,28,0.78)' : tokens.color.glassDark,
+    height: 72,
     borderTopWidth: 0,
     borderRadius: 34,
     marginHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: Platform.OS === 'ios' ? 24 : 14,
     position: 'absolute',
     paddingBottom: 0,
-    paddingTop: 6,
+    paddingTop: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.16,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 10,
   },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 48,
-    minHeight: 44,
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: tokens.color.accent,
-    marginTop: 4,
-  },
+  tabItem: { alignItems: 'center', justifyContent: 'center', minWidth: 48, minHeight: 44, borderRadius: 16 },
+  tabItemActive: {},
+  activeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: tokens.color.accent, marginTop: 4, shadowColor: tokens.color.accent, shadowOpacity: 0.9, shadowRadius: 4, shadowOffset: { width: 0, height: 0 } },
   scanButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 22,
     backgroundColor: tokens.color.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 26,
     borderWidth: 4,
     borderColor: tokens.color.bg,
-    shadowColor: tokens.color.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    ...tokens.shadow.glow,
   },
 });
