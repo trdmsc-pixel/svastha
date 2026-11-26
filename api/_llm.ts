@@ -24,12 +24,14 @@ const GROQ_VISION_CANDIDATES = [
 ];
 
 const META_TEXT_CANDIDATES = [
+  'muse-wonder-1.0',
   'Llama-4-Scout-17B-16E-Instruct-FP8',
   'Llama-4-Maverick-17B-128E-Instruct-FP8',
   'Llama-3.3-70B-Instruct',
 ];
 
 const META_VISION_CANDIDATES = [
+  'muse-wonder-1.0',
   'Llama-4-Scout-17B-16E-Instruct-FP8',
   'Llama-4-Maverick-17B-128E-Instruct-FP8',
 ];
