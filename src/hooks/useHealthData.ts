@@ -7,6 +7,7 @@ import { buildReminderSchedule } from '@/engine/reminderSchedule';
 import { buildInboxItems } from '@/engine/insights';
 import { addDays, ageFromDob, todayKey, weekdayIndex } from '@/lib/dates';
 import { sumNutrients } from '@/engine/mealAnalysis';
+import { useProgrammeReminders } from './useProgramme';
 
 export function useDayLog(date?: string): DayLog {
   const selected = useAppStore((s) => s.selectedDate);
@@ -65,10 +66,16 @@ export function useReminderSchedule() {
   const profile = useAppStore((s) => s.profile);
   const tasks = useAppStore((s) => s.tasks);
   const plan = useAppStore((s) => s.activePlan);
-  return useMemo(
-    () => buildReminderSchedule({ prefs, wakeTime: profile.wake_time, sleepTime: profile.sleep_time, tasks, retestDate: plan?.retest_date, waterGoalMl: plan?.daily_targets.water_ml }),
-    [prefs, profile.wake_time, profile.sleep_time, tasks, plan]
-  );
+  const programme = useProgrammeReminders();
+  return useMemo(() => {
+    const base = buildReminderSchedule({ prefs, wakeTime: profile.wake_time, sleepTime: profile.sleep_time, tasks, retestDate: plan?.retest_date, waterGoalMl: plan?.daily_targets.water_ml });
+    if (programme.length === 0 || !prefs.enabled) return base;
+    // A guided programme owns the daily rhythm (water, meals, routine). Keep only the user's own
+    // medicine times and one-off retest reminders from the generic schedule so nothing doubles up.
+    const kept = base.filter((r) => r.category === 'retest' || (r.category === 'medicines' && r.id.startsWith('med-')));
+    const allowed = programme.filter((r) => prefs.categories[r.category]);
+    return [...allowed, ...kept];
+  }, [prefs, profile.wake_time, profile.sleep_time, tasks, plan, programme]);
 }
 
 /** In-app notification inbox for TODAY with real unread counts. */

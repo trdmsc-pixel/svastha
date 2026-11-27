@@ -15,6 +15,10 @@ import { buildSmartCoachTip } from '@/engine/smartCoach';
 import { useDailyTargets, useDayLog, useDayTotals, useInbox, useTasksFor } from '@/hooks/useHealthData';
 import { diffDays, formatTime12, friendlyDayLabel, fromDateKey, greetingFor, todayKey, WEEKDAYS_SHORT, weekOf } from '@/lib/dates';
 import { haptic } from '@/lib/haptics';
+import { useProgrammeDay } from '@/hooks/useProgramme';
+import { useProgrammeStore } from '@/store/useProgrammeStore';
+import { menuFor, weightChange, workoutFor } from '@/engine/programmeEngine';
+import { NextUpCard, ProgrammeHero, QuickTiles, RoutineTimeline, WinToast } from '@/components/programme/ProgrammeUI';
 
 export default function TodayScreen() {
   const s = useAppStore();
@@ -29,6 +33,17 @@ export default function TodayScreen() {
   const firstName = s.profile.full_name.split(' ')[0] || 'there';
   const waterPct = Math.min(100, Math.round((day.waterMl / targets.water_ml) * 100));
   const week = weekOf(date);
+  const prog = useProgrammeDay(date);
+  const toggleCheck = useProgrammeStore((st) => st.toggleCheck);
+  const weighIns = useProgrammeStore((st) => st.weighIns);
+  const doctorDone = useProgrammeStore((st) => st.doctorDone);
+  const [winToast, setWinToast] = useState(false);
+  const tick = (id: string) => {
+    if (!prog) return;
+    const wasWon = prog.score.won;
+    const nowChecked = toggleCheck(date, id);
+    if (nowChecked && !wasWon && prog.score.total > 0 && (prog.score.done + 1) / prog.score.total >= prog.programme.winThreshold) setWinToast(true);
+  };
 
   useEffect(() => {
     void s.syncCloudFoods();
@@ -91,7 +106,48 @@ export default function TodayScreen() {
           </Pressable>
         )}
 
-        <Card variant="glow" style={styles.hero}>
+        {prog ? (
+          <>
+            <ProgrammeHero
+              name={prog.programme.name}
+              day={prog.position.day}
+              totalDays={prog.position.totalDays}
+              week={prog.position.week}
+              phaseLabel={prog.position.phase.label}
+              done={prog.score.done}
+              total={prog.score.total}
+              pct={prog.score.pct}
+              won={prog.score.won}
+              streak={prog.streak}
+              goals={prog.programme.goals}
+            />
+            {prog.next ? <NextUpCard item={prog.next.item} isNow={prog.next.isNow} minutesAway={prog.next.minutesAway} onDone={() => tick(prog.next!.item.id)} /> : null}
+            <QuickTiles
+              tiles={(() => {
+                const menu = menuFor(prog.programme, date);
+                const wo = workoutFor(prog.programme, date);
+                const wc = weightChange(weighIns);
+                return [
+                  { key: 'food', emoji: '🥗', title: 'Food', value: menu.lunch.title, sub: 'Today’s lunch', onPress: () => router.push('/programme/food') },
+                  { key: 'move', emoji: wo.type === 'rest' ? '🌿' : '💪', title: 'Move', value: wo.type === 'strength' ? 'Strength · 15 min' : wo.type === 'yoga' ? 'Yoga · 15 min' : 'Rest day', sub: `+ ${prog.position.phase.walkMin} min walk`, onPress: () => router.push('/programme/move') },
+                  { key: 'progress', emoji: '📈', title: 'Progress', value: wc ? `${wc.changeKg > 0 ? '+' : ''}${wc.changeKg} kg` : 'Add weigh-in', sub: wc ? `${wc.latestKg} kg now` : 'Sunday morning', onPress: () => router.push('/programme/progress') },
+                  { key: 'doctor', emoji: '🩺', title: 'Doctor', value: `${doctorDone.filter((d) => prog.programme.doctor.some((x) => x.id === d)).length}/${prog.programme.doctor.length} done`, sub: 'Tests & medicines', onPress: () => router.push('/programme/doctor') },
+                ];
+              })()}
+            />
+            <SectionTitle action="Full plan" onAction={() => router.push('/programme/food')}>{isToday ? 'Your day' : friendlyDayLabel(date)}</SectionTitle>
+            <RoutineTimeline items={prog.items} checked={prog.checked} nowId={prog.next?.isNow ? prog.next.item.id : null} hhmm={prog.hhmm} onToggle={tick} />
+          </>
+        ) : (
+          <Card variant="glow" style={{ marginTop: 14 }} onPress={() => router.push('/programme/setup')} accessibilityLabel="Start the 8-Week Reset">
+            <Pill icon="sparkles" label="New" tone="accent" />
+            <Text style={[ui.h2, { marginTop: 8 }]}>Start the 8-Week Reset</Text>
+            <Text style={[ui.muted, { marginTop: 4, fontSize: 15, lineHeight: 21 }]}>A full daily routine with reminders, a vegetarian menu, home workouts and a doctor checklist.</Text>
+            <Text style={[ui.accent, { marginTop: 10 }]}>Set it up →</Text>
+          </Card>
+        )}
+
+        <Card variant="glow" style={[styles.hero, prog ? { marginTop: 22 } : null]}>
           <CalorieRing
             eatenKcal={totals.kcal}
             goalKcal={targets.kcal}
@@ -200,6 +256,7 @@ export default function TodayScreen() {
           </Card>
         )}
       </ScrollView>
+      <WinToast visible={winToast} onHide={() => setWinToast(false)} />
 
       <Sheet visible={quickAdd} onClose={() => setQuickAdd(false)} title="Quick add" subtitle={`Logging to ${friendlyDayLabel(date)}`}>
         <SheetOption icon="camera" tone="accent" title="Snap a meal" subtitle="Opens your camera · AI finds food & portions" onPress={() => scan('camera')} />

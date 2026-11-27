@@ -88,6 +88,11 @@ export async function applyReminderSchedule(schedule: ScheduledReminder[], sound
           content,
           trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId: r.category },
         });
+      } else if (r.weekday) {
+        await Notifications.scheduleNotificationAsync({
+          content,
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: r.weekday, hour: h, minute: m, channelId: r.category },
+        });
       } else {
         await Notifications.scheduleNotificationAsync({
           content,

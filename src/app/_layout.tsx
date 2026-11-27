@@ -143,6 +143,11 @@ export default function RootLayout() {
                 <Stack.Screen name="notifications" />
                 <Stack.Screen name="routine" />
                 <Stack.Screen name="report/chat" />
+                <Stack.Screen name="programme/setup" options={{ animation: 'fade_from_bottom' }} />
+                <Stack.Screen name="programme/food" />
+                <Stack.Screen name="programme/move" />
+                <Stack.Screen name="programme/progress" />
+                <Stack.Screen name="programme/doctor" />
               </Stack>
               {!ready && <AnimatedLaunchOverlay />}
               {ready && <ReminderSync />}

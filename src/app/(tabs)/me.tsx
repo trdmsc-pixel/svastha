@@ -8,6 +8,7 @@ import { syncPlanToDeviceCalendar } from '@/lib/calendarSync';
 import { authenticate, getBiometricCapability } from '@/lib/biometric';
 import { aiTransportLabel } from '@/lib/ai';
 import { Screen, SectionTitle, SettingRow, Toggle } from '@/components/ui';
+import { useProgrammeStore } from '@/store/useProgrammeStore';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
@@ -15,6 +16,10 @@ import { Icon } from '@/components/Icon';
 import { ageFromDob } from '@/lib/dates';
 
 export default function MeScreen() {
+  const programmeId = useProgrammeStore((st) => st.programmeId);
+  const programmeRemindersOn = useProgrammeStore((st) => st.remindersOn);
+  const setProgrammeRemindersOn = useProgrammeStore((st) => st.setRemindersOn);
+  const stopProgramme = useProgrammeStore((st) => st.stopProgramme);
   const { session, biometricEnabled, setBiometricEnabled, logout, deleteAccount } = useAuthStore();
   const {
     profile,
@@ -146,6 +151,21 @@ export default function MeScreen() {
             <Text style={styles.statusText}>{statusMsg}</Text>
           </Card>
         )}
+
+        {/* Guided programme */}
+        <SectionTitle style={styles.secHead}>8-Week Reset</SectionTitle>
+        <Card style={styles.groupCard}>
+          {programmeId ? (
+            <>
+              <SettingRow icon="star" title="Programme reminders" subtitle="Water, meals, sun, exercise, sleep nudges" right={<Toggle label="Programme reminders" value={programmeRemindersOn} onValueChange={setProgrammeRemindersOn} />} />
+              <SettingRow icon="pill" title="Medicines & doctor checklist" subtitle="Add what your doctor prescribed" onPress={() => router.push('/programme/doctor')} />
+              <SettingRow icon="refresh" title="Restart the programme" subtitle="Pick a new start date; ticks and weigh-ins are kept" onPress={() => router.push('/programme/setup')} />
+              <SettingRow icon="logOut" title="Pause the programme" subtitle="Hides it from Today and stops its reminders" onPress={stopProgramme} danger last />
+            </>
+          ) : (
+            <SettingRow icon="sparkles" title="Start the 8-Week Reset" subtitle="Daily routine, menu, home workouts, reminders" onPress={() => router.push('/programme/setup')} last />
+          )}
+        </Card>
 
         {/* Calendar & Reminders */}
         <SectionTitle style={styles.secHead}>Calendar & Reminders</SectionTitle>

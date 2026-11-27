@@ -22,3 +22,10 @@
 ## 5. LLM Provider Abstraction
 - All AI calls run exclusively inside Supabase Edge Functions via `supabase/functions/_shared/llm.ts`.
 - Supports Gemini (`gemini-2.5-flash` default) and OpenAI-compatible endpoints via `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_VISION_MODEL`, and `LLM_TEXT_MODEL` secrets.
+
+## 6. Guided Programmes (8-Week Reset) — 28 Nov 2026
+- **What**: A data-driven programme layer (`src/programme/`) on top of the lab-report app: a timed daily routine with tick-offs, weekday menu, phased home workouts with a guided mode, weekly weigh-ins, a doctor checklist and a medicine switchboard. First programme: `reset-8` (vegetarian/satvic homemaker routine).
+- **Deterministic**: day/week/phase, scores (80% = "winning day"), streaks, next-up, retest dates and the notification schedule live in `src/engine/programmeEngine.ts` (tested in `tests/programme.test.ts`). No LLM involvement.
+- **Medicine safety**: medicine items and reminders appear only after the user switches a medicine on in the Doctor screen (i.e. it was prescribed). The app never suggests a dose.
+- **Reminders**: when a programme is active it owns the daily rhythm; the generic water/meal/routine reminders are dropped to avoid duplicates, keeping the user's own medicine times and retest one-offs. `ScheduledReminder.weekday` adds weekly triggers (per-weekday workout copy, Sunday weigh-in, weekly Vitamin D). Total stays < 40 (iOS caps pending local notifications at 64).
+- **Storage**: `useProgrammeStore` is persisted per account (`svastha-programme-v1:<userId>`), switched/wiped/exported alongside the main app data (DPDP export + deletion).
