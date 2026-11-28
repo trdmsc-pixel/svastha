@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ import { itemToTickFromAction, NOTIFICATION_ACTIONS } from '@/engine/programmeEn
 import { selectFlags, useProgrammeStore } from '@/store/useProgrammeStore';
 import { getProgramme } from '@/hooks/useProgramme';
 import { todayKey } from '@/lib/dates';
+import { autofillTodaySteps, stepsAutofillEnabled } from '@/lib/stepsSource';
 import { useAuthStore } from '@/store/useAuthStore';
 import { switchUserData, useAppStore } from '@/store/useAppStore';
 import { AppLock } from '@/components/AppLock';
@@ -125,6 +126,26 @@ function NotificationActions() {
   return null;
 }
 
+/** Fills today's steps from HealthKit / Health Connect on app focus (feature-flagged; manual fallback). */
+function StepsAutofill() {
+  useEffect(() => {
+    if (Platform.OS === 'web' || !stepsAutofillEnabled()) return;
+    const run = async () => {
+      const st = useProgrammeStore.getState();
+      if (!st.programmeId) return;
+      const today = todayKey();
+      const next = await autofillTodaySteps(st.steps[today]);
+      if (next !== null) useProgrammeStore.getState().setSteps(today, next);
+    };
+    run().catch(() => undefined);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') run().catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, []);
+  return null;
+}
+
 function AnimatedLaunchOverlay() {
   const reduced = useReducedMotion();
   const pulse = useSharedValue(1);
@@ -198,6 +219,7 @@ export default function RootLayout() {
               {!ready && <AnimatedLaunchOverlay />}
               {ready && <ReminderSync />}
               {ready && <NotificationActions />}
+              {ready && <StepsAutofill />}
               <AppLock />
             </View>
           </View>
