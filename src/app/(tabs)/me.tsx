@@ -159,6 +159,7 @@ export default function MeScreen() {
           {programmeId ? (
             <>
               <SettingRow icon="star" title="Programme reminders" subtitle="Water, meals, sun, exercise, sleep nudges" right={<Toggle label="Programme reminders" value={programmeRemindersOn} onValueChange={setProgrammeRemindersOn} />} />
+              <SettingRow icon="clock" title="Edit my times" subtitle="Day shifted? Move any step by 15 minutes" onPress={() => router.push('/programme/times')} />
               <SettingRow icon="pill" title="Medicines & doctor checklist" subtitle="Add what your doctor prescribed" onPress={() => router.push('/programme/doctor')} />
               <SettingRow icon="refresh" title="Restart the programme" subtitle="Pick a new start date; ticks and weigh-ins are kept" onPress={() => router.push('/programme/setup')} />
               <SettingRow icon="logOut" title="Pause the programme" subtitle="Hides it from Today and stops its reminders" onPress={stopProgramme} danger last />

@@ -5,9 +5,32 @@
  */
 import { ConditionFlag, MenuDay, Move, Phase, Programme, RoutineItem, Weekday, WorkoutType } from '@/programme/types';
 import { ScheduledReminder } from '@/engine/reminderSchedule';
-import { addDays, DateKey, diffDays, hhmmToMinutes, weekdayIndex } from '@/lib/dates';
+import { addDays, DateKey, diffDays, hhmmToMinutes, minutesToHHmm, weekdayIndex } from '@/lib/dates';
 
 export type Flags = Partial<Record<ConditionFlag, boolean>>;
+
+/** Per-item start-time overrides chosen by the user (item id → 'HH:mm'). */
+export type TimeOverrides = Record<string, string>;
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * Applies the user's time overrides to routine items. A window (`endTime`) moves with its
+ * start so its length is kept. Invalid override strings are ignored.
+ */
+export function applyTimeOverrides(items: RoutineItem[], overrides: TimeOverrides = {}): RoutineItem[] {
+  return items.map((it) => {
+    const t = overrides[it.id];
+    if (!t || !HHMM.test(t) || t === it.time) return it;
+    const shift = hhmmToMinutes(t) - hhmmToMinutes(it.time);
+    return { ...it, time: t, endTime: it.endTime ? minutesToHHmm(hhmmToMinutes(it.endTime) + shift) : undefined };
+  });
+}
+
+/** Shifts an HH:mm by `deltaMin`, clamped to the same day (00:00–23:45). */
+export function shiftTime(hhmm: string, deltaMin: number): string {
+  return minutesToHHmm(Math.min(23 * 60 + 45, Math.max(0, hhmmToMinutes(hhmm) + deltaMin)));
+}
 
 export interface DayPosition {
   /** 1-based day of the programme; < 1 before start, > total after the end. */
@@ -32,9 +55,9 @@ export function phaseForWeek(p: Programme, week: number): Phase {
 }
 
 /** Routine items that apply on `date`, respecting weekday rules and prescribed-medicine flags. */
-export function itemsForDate(p: Programme, date: DateKey, flags: Flags = {}): RoutineItem[] {
+export function itemsForDate(p: Programme, date: DateKey, flags: Flags = {}, overrides: TimeOverrides = {}): RoutineItem[] {
   const wd = weekdayIndex(date) as Weekday;
-  return p.routine
+  return applyTimeOverrides(p.routine, overrides)
     .filter((it) => (it.requires ? !!flags[it.requires] : true))
     .filter((it) => (it.days ? it.days.includes(wd) : true))
     .sort((a, b) => hhmmToMinutes(a.time) - hhmmToMinutes(b.time));
@@ -210,9 +233,9 @@ const WORKOUT_COPY: Record<WorkoutType, string> = {
  * item has `days`); the exercise reminder is split per weekday so the copy matches the workout;
  * a Sunday weigh-in reminder is added. Medicine items only appear when their flag is on.
  */
-export function buildProgrammeReminders(p: Programme, flags: Flags = {}): ScheduledReminder[] {
+export function buildProgrammeReminders(p: Programme, flags: Flags = {}, overrides: TimeOverrides = {}): ScheduledReminder[] {
   const out: ScheduledReminder[] = [];
-  for (const it of p.routine) {
+  for (const it of applyTimeOverrides(p.routine, overrides)) {
     if (!it.remind) continue;
     if (it.requires && !flags[it.requires]) continue;
     // The thyroid reminder already wakes her at 08:00 with the same instruction.

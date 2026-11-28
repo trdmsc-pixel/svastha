@@ -191,6 +191,7 @@ export default function RootLayout() {
                 <Stack.Screen name="programme/move" />
                 <Stack.Screen name="programme/progress" />
                 <Stack.Screen name="programme/doctor" />
+                <Stack.Screen name="programme/times" />
               </Stack>
               {!ready && <AnimatedLaunchOverlay />}
               {ready && <ReminderSync />}

@@ -51,3 +51,34 @@ describe('ticking from a notification action', () => {
     expect(itemToTickFromAction(P, SUNDAY, 'DONE', 'whatever', [], {}, 'not-an-item')).toBeNull();
   });
 });
+
+import { applyTimeOverrides, itemsForDate as items, shiftTime, buildProgrammeReminders as reminders } from '@/engine/programmeEngine';
+import { hhmmToMinutes } from '@/lib/dates';
+
+describe('time overrides', () => {
+  test('override moves an item and re-sorts the day', () => {
+    const base = items(P, SUNDAY).map((i) => i.id);
+    const moved = items(P, SUNDAY, {}, { exercise: '06:30' });
+    expect(moved[0].id).toBe('exercise');
+    expect(moved.map((i) => hhmmToMinutes(i.time))).toEqual([...moved.map((i) => hhmmToMinutes(i.time))].sort((a, b) => a - b));
+    expect(new Set(moved.map((i) => i.id))).toEqual(new Set(base));
+  });
+  test('a window keeps its length when moved', () => {
+    const ex = applyTimeOverrides(P.routine, { exercise: '18:15' }).find((i) => i.id === 'exercise')!;
+    expect(ex.time).toBe('18:15');
+    expect(ex.endTime).toBe('19:00'); // 17:15–18:00 shifted by 1 h
+  });
+  test('invalid overrides are ignored', () => {
+    expect(applyTimeOverrides(P.routine, { exercise: '25:99' }).find((i) => i.id === 'exercise')!.time).toBe('17:15');
+  });
+  test('reminders follow overrides on every weekday', () => {
+    const rs = reminders(P, {}, { exercise: '06:30' }).filter((r) => r.itemId === 'exercise');
+    expect(rs).toHaveLength(7);
+    expect(rs.every((r) => r.time === '06:30')).toBe(true);
+  });
+  test('shiftTime clamps inside the day', () => {
+    expect(shiftTime('23:45', 15)).toBe('23:45');
+    expect(shiftTime('00:00', -15)).toBe('00:00');
+    expect(shiftTime('08:00', 15)).toBe('08:15');
+  });
+});

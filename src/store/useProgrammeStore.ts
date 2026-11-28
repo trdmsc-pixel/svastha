@@ -11,7 +11,7 @@ export interface MedicineEntry {
   startedOn?: DateKey;
 }
 
-type ProgrammeData = Pick<ProgrammeState, 'programmeId' | 'startDate' | 'checks' | 'steps' | 'weighIns' | 'doctorDone' | 'questionsDone' | 'medicines' | 'remindersOn'>;
+type ProgrammeData = Pick<ProgrammeState, 'programmeId' | 'startDate' | 'checks' | 'steps' | 'weighIns' | 'doctorDone' | 'questionsDone' | 'medicines' | 'remindersOn' | 'timeOverrides'>;
 
 export interface ProgrammeState {
   programmeId: string | null;
@@ -24,6 +24,10 @@ export interface ProgrammeState {
   questionsDone: string[];
   medicines: Record<ConditionFlag, MedicineEntry>;
   remindersOn: boolean;
+  /** User-chosen start times per routine item (her day may shift). */
+  timeOverrides: Record<string, string>;
+  setTimeOverride: (itemId: string, hhmm: string | null) => void;
+  resetTimeOverrides: () => void;
   startProgramme: (id: string, startDate: DateKey, first?: Omit<WeighIn, 'date'> | null) => void;
   stopProgramme: () => void;
   toggleCheck: (date: DateKey, itemId: string) => boolean; // returns new checked state
@@ -54,6 +58,7 @@ const INITIAL: ProgrammeData = {
   questionsDone: [],
   medicines: EMPTY_MEDS,
   remindersOn: true,
+  timeOverrides: {},
 };
 
 const programmeKey = (userId: string) => `svastha-programme-v1:${userId}`;
@@ -92,8 +97,16 @@ export const useProgrammeStore = create<ProgrammeState>()(
           return { medicines: { ...s.medicines, [flag]: next } };
         }),
       setRemindersOn: (on) => set({ remindersOn: on }),
+      setTimeOverride: (itemId, hhmm) =>
+        set((s) => {
+          const next = { ...s.timeOverrides };
+          if (hhmm) next[itemId] = hhmm;
+          else delete next[itemId];
+          return { timeOverrides: next };
+        }),
+      resetTimeOverrides: () => set({ timeOverrides: {} }),
     }),
-    { name: programmeKey('anon'), storage: persistStorage, version: 1 }
+    { name: programmeKey('anon'), storage: persistStorage, version: 2, migrate: (state) => ({ timeOverrides: {}, ...(state as object) }) as ProgrammeState }
   )
 );
 
@@ -118,6 +131,6 @@ export async function wipeProgrammeUser(userId: string): Promise<void> {
 }
 
 export function exportProgrammeData(): ProgrammeData {
-  const { programmeId, startDate, checks, steps, weighIns, doctorDone, questionsDone, medicines, remindersOn } = useProgrammeStore.getState();
-  return { programmeId, startDate, checks, steps, weighIns, doctorDone, questionsDone, medicines, remindersOn };
+  const { programmeId, startDate, checks, steps, weighIns, doctorDone, questionsDone, medicines, remindersOn, timeOverrides } = useProgrammeStore.getState();
+  return { programmeId, startDate, checks, steps, weighIns, doctorDone, questionsDone, medicines, remindersOn, timeOverrides };
 }

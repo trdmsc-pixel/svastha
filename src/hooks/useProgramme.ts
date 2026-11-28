@@ -32,6 +32,7 @@ export function useProgrammeDay(date: DateKey) {
   const id = useProgrammeStore((s) => s.programmeId);
   const startDate = useProgrammeStore((s) => s.startDate);
   const checks = useProgrammeStore((s) => s.checks);
+  const overrides = useProgrammeStore((s) => s.timeOverrides);
   const flags = useProgrammeFlags();
   const programme = getProgramme(id);
   const clock = useClock();
@@ -39,22 +40,23 @@ export function useProgrammeDay(date: DateKey) {
   return useMemo(() => {
     if (!programme || !startDate) return null;
     const position = dayPosition(programme, startDate, date);
-    const items = itemsForDate(programme, date, flags);
+    const items = itemsForDate(programme, date, flags, overrides);
     const checked = checks[date] ?? [];
     const score = dayScore(programme, date, checked, flags);
     const next = date === clock.today ? nextUp(items, clock.hhmm, checked) : null;
     const currentStreak = streak(programme, startDate, clock.today, checks, flags);
     return { programme, startDate, position, items, checked, score, next, streak: currentStreak, flags, hhmm: date === clock.today ? clock.hhmm : null };
-  }, [programme, startDate, date, flags, checks, clock.today, clock.hhmm]);
+  }, [programme, startDate, date, flags, overrides, checks, clock.today, clock.hhmm]);
 }
 
 /** Programme reminders, or [] when no programme is active / reminders are off. */
 export function useProgrammeReminders() {
   const id = useProgrammeStore((s) => s.programmeId);
   const on = useProgrammeStore((s) => s.remindersOn);
+  const overrides = useProgrammeStore((s) => s.timeOverrides);
   const flags = useProgrammeFlags();
   return useMemo(() => {
     const p = getProgramme(id);
-    return p && on ? buildProgrammeReminders(p, flags) : [];
-  }, [id, on, flags]);
+    return p && on ? buildProgrammeReminders(p, flags, overrides) : [];
+  }, [id, on, flags, overrides]);
 }
