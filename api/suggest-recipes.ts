@@ -75,8 +75,10 @@ export default async function handler(req: VercelRequestLike, res: VercelRespons
   try {
     const { data, model } = await callStructuredLLM({
       systemPrompt: SYSTEM_PROMPT,
-      userText: `Reassess this user's database profile, latest lab report biomarkers, remaining daily macros, and craving to craft 5 fresh personalised recipes:\n${JSON.stringify(payload)}`,
+      userText: `Reassess this user's database profile, latest lab report biomarkers, remaining daily macros, and craving to craft 5 fresh personalised recipes (keep each recipe's steps concise, 2-4 short steps):\n${JSON.stringify(payload)}`,
       schema: SuggestRecipesSchema,
+      fast: true,
+      maxOutputTokens: 4096,
     });
     return res.status(200).json({ recipes: data.recipes, model, prompt_version: 'suggest-recipes-v2' });
   } catch (err) {

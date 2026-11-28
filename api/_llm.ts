@@ -38,11 +38,12 @@ async function fetchGeminiFlashModels(apiKey: string): Promise<string[]> {
 function extractJsonString(raw: string): string {
   const trimmed = raw.trim();
   const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
-  if (fence?.[1]) return fence[1].trim();
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start !== -1 && end > start) return trimmed.slice(start, end + 1);
-  return trimmed;
+  let candidate = fence?.[1] ? fence[1].trim() : trimmed;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start !== -1 && end > start) candidate = candidate.slice(start, end + 1);
+  // Remove trailing commas before closing braces/brackets if any
+  return candidate.replace(/,\s*([}\]])/g, '$1');
 }
 
 export async function callStructuredLLM<T>(opts: {
@@ -85,7 +86,7 @@ export async function callStructuredLLM<T>(opts: {
     const generationConfig: Record<string, unknown> = {
       responseMimeType: 'application/json',
       temperature: 0.2,
-      maxOutputTokens: opts.maxOutputTokens ?? (tier === 'fast' ? 1600 : 4096),
+      maxOutputTokens: opts.maxOutputTokens ?? (tier === 'fast' ? 2400 : 4096),
     };
 
     // Disabling hidden thinking tokens on Gemini 2.5 Flash cuts latency from ~20s to ~2-3s!
@@ -135,7 +136,7 @@ export async function callStructuredLLM<T>(opts: {
       } catch (err) {
         lastErr = err;
         const st = (err as { status?: number }).status;
-        if (st === 404 || st === 429 || st === 503) continue;
+        if (st === 404 || st === 429 || st === 503 || err instanceof SyntaxError) continue;
         throw err;
       }
     }
