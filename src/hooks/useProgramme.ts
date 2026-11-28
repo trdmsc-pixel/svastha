@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RESET_8 } from '@/programme/reset8';
 import { Programme } from '@/programme/types';
-import { buildProgrammeReminders, dayPosition, dayScore, itemsForDate, nextUp, streak, Flags } from '@/engine/programmeEngine';
+import { buildComebackReminder, buildProgrammeReminders, buildSundayReminders, dayPosition, dayScore, itemsForDate, nextUp, streak, Flags } from '@/engine/programmeEngine';
 import { selectFlags, useProgrammeStore } from '@/store/useProgrammeStore';
 import { DateKey, todayKey } from '@/lib/dates';
 
@@ -49,14 +49,31 @@ export function useProgrammeDay(date: DateKey) {
   }, [programme, startDate, date, flags, overrides, checks, clock.today, clock.hhmm]);
 }
 
-/** Programme reminders, or [] when no programme is active / reminders are off. */
+/**
+ * Programme reminders, or [] when no programme is active / reminders are off.
+ * Includes the state-aware ones (Sunday recap with last week's real numbers, comeback nudge),
+ * so this recomputes when ticks change and when the day rolls over; `ReminderSync` debounces
+ * the actual rescheduling.
+ */
 export function useProgrammeReminders() {
   const id = useProgrammeStore((s) => s.programmeId);
   const on = useProgrammeStore((s) => s.remindersOn);
   const overrides = useProgrammeStore((s) => s.timeOverrides);
+  const startDate = useProgrammeStore((s) => s.startDate);
+  const checks = useProgrammeStore((s) => s.checks);
   const flags = useProgrammeFlags();
+  const { today, hhmm } = useClock();
+  // Only the side of 08:15 / 09:05 matters, not every minute — avoids rescheduling every 30 s.
+  const phase = `${hhmm < '08:15' ? 'a' : 'b'}${hhmm < '09:05' ? 'a' : 'b'}`;
   return useMemo(() => {
     const p = getProgramme(id);
-    return p && on ? buildProgrammeReminders(p, flags, overrides) : [];
-  }, [id, on, flags, overrides]);
+    if (!p || !on) return [];
+    const base = buildProgrammeReminders(p, flags, overrides).filter((r) => r.id !== 'prog-weighin');
+    if (!startDate) return base;
+    // Representative times on the right side of each cut-off (08:15 Sunday, 09:05 comeback).
+    const sundayNow = phase[0] === 'a' ? '08:00' : '09:10';
+    const comebackNow = phase[1] === 'a' ? '09:00' : '09:10';
+    const comeback = buildComebackReminder(p, startDate, today, comebackNow, checks, flags);
+    return [...base, ...buildSundayReminders(p, startDate, today, sundayNow, checks, flags), ...(comeback ? [comeback] : [])];
+  }, [id, on, flags, overrides, startDate, checks, today, phase]);
 }

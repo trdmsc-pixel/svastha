@@ -256,3 +256,100 @@ export function buildProgrammeReminders(p: Programme, flags: Flags = {}, overrid
   out.push({ id: 'prog-weighin', category: 'routine', title: 'Sunday check 📏', body: 'Weigh in before tea, measure your waist, and see your week.', time: '08:15', weekday: toExpoWeekday(6) });
   return out.sort((a, b) => hhmmToMinutes(a.time) - hhmmToMinutes(b.time));
 }
+
+/* ───────────── Dynamic, state-aware reminders (rebuilt whenever ticks change) ───────────── */
+
+/** Next Sunday on/after `today` whose `atHHmm` hasn't passed yet. */
+export function nextSundayFire(today: DateKey, nowHHmm: string, atHHmm = '08:15'): DateKey {
+  const wd = weekdayIndex(today);
+  if (wd === 6 && hhmmToMinutes(nowHHmm) < hhmmToMinutes(atHHmm)) return today;
+  return addDays(today, wd === 6 ? 7 : 6 - wd);
+}
+
+export interface WeekRecap {
+  wonDays: number;
+  countedDays: number;
+  streak: number;
+}
+
+/** Recap of the 7 days before `fireDate` (only days on/after the programme start, never the future). */
+export function weekRecap(p: Programme, startDate: DateKey, fireDate: DateKey, today: DateKey, checks: Record<DateKey, string[]>, flags: Flags = {}): WeekRecap {
+  let won = 0;
+  let counted = 0;
+  for (let i = 7; i >= 1; i--) {
+    const d = addDays(fireDate, -i);
+    if (diffDays(startDate, d) < 0 || diffDays(today, d) > 0) continue;
+    counted++;
+    if (dayScore(p, d, checks[d], flags).won) won++;
+  }
+  const lastDay = addDays(fireDate, -1);
+  const upTo = diffDays(today, lastDay) > 0 ? today : lastDay;
+  return { wonDays: won, countedDays: counted, streak: diffDays(startDate, upTo) < 0 ? 0 : streak(p, startDate, upTo, checks, flags) };
+}
+
+/** Warm, never-shaming copy for the Sunday check-in. Deterministic. */
+export function sundaySummaryCopy(r: WeekRecap): { title: string; body: string } {
+  const tail = 'Weigh in before tea.';
+  if (r.countedDays === 0) return { title: 'Sunday check 📏', body: 'Weigh in before tea, measure your waist, and see your week.' };
+  const streakPart = r.streak >= 2 ? `, 🔥 ${r.streak}-day streak` : '';
+  if (r.wonDays === 0) {
+    return { title: 'Sunday check 📏', body: `New week, fresh sheet. Pick one habit to win today. ${tail}` };
+  }
+  const cheer = r.wonDays >= Math.max(5, r.countedDays - 1) ? ' Brilliant week!' : r.wonDays * 2 >= r.countedDays ? ' Steady progress.' : ' Every tick counts.';
+  return { title: 'Your week in ticks 📏', body: `Last week: ${r.wonDays}/${r.countedDays} winning days${streakPart}.${cheer} ${tail}` };
+}
+
+/**
+ * Sunday check-in as dated reminders: the next Sunday carries last week's real numbers; the
+ * following Sundays (up to `extraWeeks`) keep gentle static copy as a fallback in case the app
+ * isn't opened. Rebuilding the schedule (on every tick change) refreshes the numbers.
+ */
+export function buildSundayReminders(
+  p: Programme,
+  startDate: DateKey,
+  today: DateKey,
+  nowHHmm: string,
+  checks: Record<DateKey, string[]>,
+  flags: Flags = {},
+  extraWeeks = 3
+): ScheduledReminder[] {
+  const end = addDays(startDate, p.weeks * 7);
+  const first = nextSundayFire(today, nowHHmm);
+  const out: ScheduledReminder[] = [];
+  for (let w = 0; w <= extraWeeks; w++) {
+    const date = addDays(first, w * 7);
+    if (diffDays(end, date) > 0) break; // allow the Sunday right after the last week
+    const copy = w === 0 ? sundaySummaryCopy(weekRecap(p, startDate, date, today, checks, flags)) : { title: 'Sunday check 📏', body: 'Weigh in before tea, measure your waist, and see your week.' };
+    out.push({ id: `prog-weighin-${date}`, category: 'routine', title: copy.title, body: copy.body, time: '08:15', date });
+  }
+  return out;
+}
+
+export const COMEBACK_TIME = '09:05';
+export const COMEBACK_COPY = { title: 'New day, fresh sheet 🌱', body: 'Just breakfast + water to start.' };
+
+/**
+ * Gentle comeback nudge: a one-off at 09:05 on the morning after a day that scored under 50%.
+ * Before 09:05 it looks at yesterday (for today); after 09:05 it looks at today-so-far (for
+ * tomorrow) so it is already queued even if the app isn't opened next morning — and it is
+ * removed automatically once more ticks lift the day over 50%. At most one per date (id).
+ */
+export function buildComebackReminder(
+  p: Programme,
+  startDate: DateKey,
+  today: DateKey,
+  nowHHmm: string,
+  checks: Record<DateKey, string[]>,
+  flags: Flags = {}
+): ScheduledReminder | null {
+  const beforeNudge = hhmmToMinutes(nowHHmm) < hhmmToMinutes(COMEBACK_TIME);
+  const scored = beforeNudge ? addDays(today, -1) : today;
+  const fireDate = beforeNudge ? today : addDays(today, 1);
+  if (diffDays(startDate, scored) < 0) return null; // nothing to come back from yet
+  if (diffDays(fireDate, addDays(startDate, p.weeks * 7 - 1)) < 0) return null; // programme over
+  const s = dayScore(p, scored, checks[scored], flags);
+  if (s.total === 0 || s.pct >= 0.5) return null;
+  // Already started the fire day (e.g. ticked breakfast early)? Don't nag.
+  if ((checks[fireDate] ?? []).length >= 2) return null;
+  return { id: `prog-comeback-${fireDate}`, category: 'routine', title: COMEBACK_COPY.title, body: COMEBACK_COPY.body, time: COMEBACK_TIME, date: fireDate };
+}

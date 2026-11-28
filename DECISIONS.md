@@ -43,3 +43,9 @@
 
 ## 9. Editable times (Task 3)
 - `timeOverrides: Record<itemId, 'HH:mm'>` lives in the per-account programme store (persist v2 with a migration). The printed plan in `reset8.ts` is never modified; overrides are applied on top by `applyTimeOverrides` inside `itemsForDate` and `buildProgrammeReminders`, so the day re-sorts and reminders reschedule automatically. A window keeps its length; invalid strings are ignored. Setting an item back to its plan time removes the override.
+
+## 10. Dynamic Sunday recap & comeback nudge (Tasks 4–5)
+- Local notifications can't compute at fire time, so the content is computed when the schedule is rebuilt. `useProgrammeReminders` now depends on ticks and the day; `ReminderSync` debounces (2 s) so a burst of ticks reschedules once.
+- The weekly 08:15 Sunday trigger is replaced (in the hook) by **dated** reminders: next Sunday carries last week's real numbers from `weekRecap` + `sundaySummaryCopy` ("Last week: 5/7 winning days, 🔥 5-day streak. Steady progress. Weigh in before tea."); the next 3 Sundays keep gentle static copy in case the app isn't opened. Zero-win weeks get encouraging copy, never a score.
+- Comeback nudge (`buildComebackReminder`): one-off at 09:05 after a day under 50%, id `prog-comeback-<date>` (max one per day). Before 09:05 it judges yesterday; after 09:05 it judges today-so-far and queues tomorrow, so it's ready even if the app isn't opened in the morning, and disappears once more ticks lift the day over 50%. Skipped if she's already ticked 2+ items that morning.
+- Total pending notifications stay ≈ 30, under iOS's 64 cap.

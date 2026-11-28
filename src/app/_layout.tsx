@@ -77,9 +77,11 @@ function ReminderSync() {
   const session = useAuthStore((s) => s.session);
   useEffect(() => {
     if (!session || Platform.OS === 'web') return;
+    // Debounced: ticking several items in a row (which refreshes the Sunday recap and the
+    // comeback nudge) reschedules once, not once per tap.
     const t = setTimeout(() => {
       applyReminderSchedule(schedule, sound).catch(() => undefined);
-    }, 800);
+    }, 2000);
     return () => clearTimeout(t);
   }, [schedule, sound, session]);
   return null;
