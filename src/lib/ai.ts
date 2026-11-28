@@ -72,7 +72,7 @@ async function viaSupabase<T>(endpoint: AiEndpoint, body: unknown): Promise<AiRe
 export async function callAi<T>(endpoint: AiEndpoint, body: unknown, timeoutMs = 45_000): Promise<AiResult<T>> {
   const apiRes = await viaApi<T>(endpoint, body, timeoutMs);
   if (apiRes?.ok) return apiRes;
-  if (apiRes && (apiRes.reason === 'rate_limited' || apiRes.reason === 'too_large' || apiRes.reason === 'offline')) {
+  if (apiRes && (apiRes.reason === 'rate_limited' || apiRes.reason === 'offline')) {
     return apiRes;
   }
 

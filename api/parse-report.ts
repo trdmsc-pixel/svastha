@@ -98,7 +98,7 @@ export default async function handler(req: VercelRequestLike, res: VercelRespons
       imagesBase64: useVision ? attachments : undefined,
       schema: ParseReportSchema,
       useVision,
-      fast: false,
+      fast: true,
       maxOutputTokens: 4096,
     });
     body = {};

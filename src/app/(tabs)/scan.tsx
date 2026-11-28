@@ -20,11 +20,17 @@ import { friendlyDayLabel } from '@/lib/dates';
 import { haptic } from '@/lib/haptics';
 
 type Phase = 'idle' | 'working' | 'review';
-const STEPS = [
+const MEAL_STEPS = [
   'Stripping location & camera metadata',
   'Recognising exact dishes & portions with Gemini Vision',
   'Checking cloud food DB & auto-cataloguing new foods',
   'Original photo discarded — nothing stored',
+];
+const REPORT_STEPS = [
+  'Reading PDF / report pages in memory',
+  'Extracting biomarkers, units & lab ranges with Gemini AI',
+  'Evaluating deterministic thresholds & safety flags',
+  'Original PDF / photo discarded — nothing stored',
 ];
 
 export default function ScanScreen() {
@@ -168,18 +174,22 @@ export default function ScanScreen() {
     }
     const res = await callAi<{ parsed: ParsedReportPayload }>('parse-report', body, 120_000);
     discard(); body = {};
-    setPhase('idle');
     if (!res.ok) {
+      setPhase('idle');
       setNoteTone('watch');
       setNote(`${res.message} The file was discarded. You can try the sample report meanwhile.`);
       return;
     }
+    setStep(2);
     const { report, unrecognisedCount } = buildReportFromParsed(res.data.parsed, kind === 'pdf' ? 'pdf' : 'photo');
     if (report.values.length === 0) {
+      setPhase('idle');
       setNoteTone('watch');
       setNote('No lab values could be read. Try clearer photos with the results table in frame.');
       return;
     }
+    setStep(3);
+    setPhase('idle');
     s.addReport(report);
     s.buildPlanForReport(report.id);
     haptic.success();
@@ -228,7 +238,11 @@ export default function ScanScreen() {
         <Banner
           icon="shield"
           style={{ marginTop: 12 }}
-          text="Zero-storage privacy: photos & PDFs are analysed in memory by Gemini and discarded immediately. New dishes are auto-catalogued as nutrition text only."
+          text={
+            mode === 'meal'
+              ? 'Zero-storage privacy: meal photos are analysed in memory by Gemini and discarded immediately. New dishes are auto-catalogued as nutrition text only.'
+              : 'Zero-storage privacy: lab PDFs & report photos are analysed in memory by Gemini and discarded immediately — only your extracted biomarker numbers are saved.'
+          }
         />
         {note && <Banner tone={noteTone} icon={noteTone === 'ok' ? 'sparkles' : 'info'} text={note} style={{ marginTop: 10 }} />}
 
@@ -237,11 +251,11 @@ export default function ScanScreen() {
             <Card variant="glow" style={{ marginTop: 14 }}>
               <View style={[ui.row, { gap: 8, marginBottom: 8 }]}>
                 <Icon name="sparkles" size={18} color={tokens.color.accentText} />
-                <Text style={ui.h3}>Gemini AI is analysing…</Text>
+                <Text style={ui.h3}>{mode === 'report' ? 'Gemini AI is reading your lab report…' : 'Gemini AI is analysing…'}</Text>
               </View>
               <ShimmerBar width="88%" height={12} style={{ marginBottom: 8 }} />
               <ShimmerBar width="65%" height={12} style={{ marginBottom: 14 }} />
-              {STEPS.map((t, i) => (
+              {(mode === 'report' ? REPORT_STEPS : MEAL_STEPS).map((t, i) => (
                 <View key={t} style={[ui.row, { gap: 10, marginTop: 8, opacity: i <= step ? 1 : 0.4 }]}>
                   <Icon name={i < step ? 'check' : 'clock'} size={16} color={i < step ? tokens.color.ok : tokens.color.inkMuted} />
                   <Text style={ui.label}>{t}</Text>

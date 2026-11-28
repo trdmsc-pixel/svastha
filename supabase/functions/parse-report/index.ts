@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
       imagesBase64: useVision ? attachments : undefined,
       schema: ParseReportSchema,
       useVision,
-      fast: false,
+      fast: true,
       maxOutputTokens: 4096,
     });
 
