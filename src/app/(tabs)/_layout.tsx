@@ -8,7 +8,9 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { tokens } from '@/theme/tokens';
+import { tabBarBottomGap } from '@/components/ui';
 import { Icon, IconName } from '@/components/Icon';
 import { useScanLauncher } from '@/store/useScanLauncher';
 
@@ -41,13 +43,15 @@ function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
 
 /** Frosted charcoal floating tab bar with smooth shift/fade tab transitions. */
 export default function TabsLayout() {
+  // Float the bar above the iPhone home indicator / Android gesture bar instead of a fixed offset.
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
         animation: 'shift',
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { marginBottom: tabBarBottomGap(insets.bottom) }],
         tabBarBackground: () =>
           Platform.OS === 'ios' ? (
             <BlurView intensity={50} tint="dark" style={[StyleSheet.absoluteFill, { borderRadius: 34, overflow: 'hidden' }]} />
@@ -87,7 +91,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     borderRadius: 34,
     marginHorizontal: 16,
-    marginBottom: Platform.OS === 'ios' ? 24 : 14,
     position: 'absolute',
     paddingBottom: 0,
     paddingTop: 10,

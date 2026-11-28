@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { tokens } from '@/theme/tokens';
+import { useScrollBottomPad } from '@/components/ui';
 import { useAppStore } from '@/store/useAppStore';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -13,6 +14,7 @@ import { DisclaimerFooter } from '@/components/DisclaimerFooter';
 import { compareReports } from '@/engine/biomarkerEngine';
 
 export default function HealthScreen() {
+  const bottomPad = useScrollBottomPad();
   const { reports, loadSampleReport, importFollowUpSampleReport, buildPlanForReport } = useAppStore();
   const [showOk, setShowOk] = useState(false);
   const [whyText, setWhyText] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export default function HealthScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]}>
         <Text style={styles.title}>Health & Reports</Text>
 
         {!latest ? (

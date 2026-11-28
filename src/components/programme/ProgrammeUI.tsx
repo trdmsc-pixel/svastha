@@ -70,12 +70,13 @@ export function ProgressHalo({ pct, size = 168, stroke = 16, center, won }: { pc
   const glow = useAnimatedStyle(() => ({ opacity: breath.value, transform: [{ scale: 0.92 + breath.value * 0.1 }] }));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
+  const gid = `halo${React.useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.haloGlow, { borderRadius: size / 2, backgroundColor: won ? 'rgba(46,107,58,0.16)' : 'rgba(240,154,106,0.22)' }, glow]} />
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Defs>
-          <SvgGradient id="haloGrad" x1="0" y1="0" x2="1" y2="1">
+          <SvgGradient id={gid} x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0" stopColor={won ? '#8BD19A' : tokens.color.gold} />
             <Stop offset="0.55" stopColor={won ? '#4FA36A' : tokens.color.accent} />
             <Stop offset="1" stopColor={won ? tokens.color.ok : tokens.color.accentDeep} />
@@ -83,7 +84,7 @@ export function ProgressHalo({ pct, size = 168, stroke = 16, center, won }: { pc
         </Defs>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(43,43,43,0.07)" strokeWidth={stroke} fill="rgba(255,255,255,0.55)" />
         {p > 0.001 ? (
-          <Circle cx={size / 2} cy={size / 2} r={r} stroke="url(#haloGrad)" strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={`${c * p} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+          <Circle cx={size / 2} cy={size / 2} r={r} stroke={`url(#${gid})`} strokeWidth={stroke} fill="none" strokeLinecap="round" strokeDasharray={`${c * p} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
         ) : null}
       </Svg>
       {center}
@@ -194,7 +195,7 @@ export function NextUpCard({ item, isNow, minutesAway, onDone }: { item: Routine
         <Text style={styles.nextTime}>{formatTime12(item.time)}{item.endTime ? ` – ${formatTime12(item.endTime)}` : ''}</Text>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <Text style={{ fontSize: 40 }}>{item.emoji}</Text>
+        <Text style={styles.bigEmoji} allowFontScaling={false}>{item.emoji}</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.nextTitle}>{item.title}</Text>
           {item.detail ? <Text style={styles.nextDetail}>{item.detail}</Text> : null}
@@ -248,7 +249,7 @@ function TimelineRow({ item, checked, isNow, past, onToggle, index }: { item: Ro
   const body = (
     <View style={[styles.row, item.key && styles.rowKey, isNow && styles.rowNow, (past && !checked && item.track) && { opacity: 0.72 }]}>
       {isNow ? <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.rowNowGlow, glow]} /> : null}
-      <Text style={styles.rowEmoji}>{item.emoji}</Text>
+      <Text style={styles.rowEmoji} allowFontScaling={false}>{item.emoji}</Text>
       <View style={{ flex: 1 }}>
         <Text style={[styles.rowTitle, checked && styles.rowTitleDone]}>{item.title}</Text>
         {item.detail ? <Text style={styles.rowDetail}>{item.detail}</Text> : null}
@@ -327,7 +328,7 @@ export function QuickTiles({ tiles }: { tiles: Tile[] }) {
             accessibilityLabel={`${t.title}: ${t.value}`}
             style={({ pressed }) => [styles.tile, pressed && { transform: [{ scale: 0.97 }] }]}
           >
-            <Text style={{ fontSize: 26 }}>{t.emoji}</Text>
+            <Text style={styles.rowEmoji} allowFontScaling={false}>{t.emoji}</Text>
             <Text style={styles.tileTitle}>{t.title}</Text>
             <Text style={styles.tileValue} numberOfLines={2}>{t.value}</Text>
             {t.sub ? <Text style={styles.tileSub} numberOfLines={1}>{t.sub}</Text> : null}
@@ -406,7 +407,8 @@ const styles = StyleSheet.create({
   rowKey: { backgroundColor: 'rgba(255,249,243,0.92)', borderColor: 'rgba(240,154,106,0.35)' },
   rowNow: { borderColor: tokens.color.accent, borderWidth: 2 },
   rowNowGlow: { borderRadius: 22, backgroundColor: 'rgba(240,154,106,0.12)' },
-  rowEmoji: { fontSize: 26 },
+  rowEmoji: { fontSize: 26, lineHeight: 34, textAlign: 'center', includeFontPadding: false },
+  bigEmoji: { fontSize: 40, lineHeight: 50, textAlign: 'center', includeFontPadding: false },
   rowTitle: { fontSize: 16.5, fontWeight: '700', color: tokens.color.ink, lineHeight: 21 },
   rowTitleDone: { color: tokens.color.inkMuted, textDecorationLine: 'line-through' },
   rowDetail: { fontSize: 13.5, color: tokens.color.inkMuted, lineHeight: 18, marginTop: 2 },

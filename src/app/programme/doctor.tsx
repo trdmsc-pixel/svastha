@@ -4,7 +4,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { Card } from '@/components/Card';
 import { Icon } from '@/components/Icon';
-import { Banner, Screen, ScreenHeader, SectionTitle, Toggle, ui } from '@/components/ui';
+import { Banner, Screen, ScreenHeader, SectionTitle, Toggle, ui, useScrollBottomPad } from '@/components/ui';
 import { RESET_8 } from '@/programme/reset8';
 import { ConditionFlag } from '@/programme/types';
 import { retestPlan } from '@/engine/programmeEngine';
@@ -35,6 +35,7 @@ function CheckRow({ checked, title, detail, tag, onPress }: { checked: boolean; 
 }
 
 export default function DoctorScreen() {
+  const bottomPad = useScrollBottomPad();
   const st = useProgrammeStore();
   const p = getProgramme(st.programmeId) ?? RESET_8;
   const retests = retestPlan(st.startDate ?? todayKey(), st.medicines.thyroid.startedOn ?? null, st.medicines.vitaminD.startedOn ?? null);
@@ -43,7 +44,7 @@ export default function DoctorScreen() {
   return (
     <Screen>
       <ScreenHeader title="Doctor" subtitle={`${done} of ${p.doctor.length} steps done`} />
-      <ScrollView contentContainerStyle={ui.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Banner text="Do these first. Fixing the thyroid, B12 and Vitamin D before pregnancy gives the best start." />
 
         <SectionTitle>Steps</SectionTitle>

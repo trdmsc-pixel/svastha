@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeIn, FadeInDown, FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { Card } from '@/components/Card';
-import { Banner, GlowBar, Screen, ScreenHeader, SectionTitle, Stepper, ui } from '@/components/ui';
+import { Banner, GlowBar, Screen, ScreenHeader, SectionTitle, Stepper, ui, useScrollBottomPad } from '@/components/ui';
 import { ProgressHalo } from '@/components/programme/ProgrammeUI';
 import { RESET_8 } from '@/programme/reset8';
 import { Move } from '@/programme/types';
@@ -96,6 +96,7 @@ function Guided({ moves, phaseIndex, rounds, onClose, onFinish }: { moves: Move[
 }
 
 export default function MoveScreen() {
+  const bottomPad = useScrollBottomPad();
   const id = useProgrammeStore((s) => s.programmeId);
   const startDate = useProgrammeStore((s) => s.startDate) ?? todayKey();
   const steps = useProgrammeStore((s) => s.steps);
@@ -119,7 +120,7 @@ export default function MoveScreen() {
   return (
     <Screen>
       <ScreenHeader title="Move" subtitle={`Week ${pos.week} · ${phase.label}`} />
-      <ScrollView contentContainerStyle={ui.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         <Card variant="glow">
           <Text style={ui.micro}>Today · 5:15 PM</Text>
           <Text style={styles.big}>{wo.type === 'strength' ? '💪 Walk + Strength' : wo.type === 'yoga' ? '🧘‍♀️ Walk + Yoga' : '🌿 Rest day'}</Text>

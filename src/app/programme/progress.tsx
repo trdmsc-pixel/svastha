@@ -5,7 +5,7 @@ import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient as SvgGrad, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { tokens } from '@/theme/tokens';
 import { Card } from '@/components/Card';
-import { Banner, Screen, ScreenHeader, SectionTitle, Stepper, ui } from '@/components/ui';
+import { Banner, Screen, ScreenHeader, SectionTitle, Stepper, ui, useScrollBottomPad } from '@/components/ui';
 import { RESET_8 } from '@/programme/reset8';
 import { dayPosition, targetBand, weekSummaries, weightChange } from '@/engine/programmeEngine';
 import { getProgramme, useProgrammeFlags } from '@/hooks/useProgramme';
@@ -52,6 +52,7 @@ function WeightChart({ points, startDate, startKg, weeks }: { points: Array<{ da
 }
 
 export default function ProgressScreen() {
+  const bottomPad = useScrollBottomPad();
   const st = useProgrammeStore();
   const flags = useProgrammeFlags();
   const p = getProgramme(st.programmeId) ?? RESET_8;
@@ -76,7 +77,7 @@ export default function ProgressScreen() {
   return (
     <Screen>
       <ScreenHeader title="Progress" subtitle={`Day ${Math.max(1, Math.min(pos.day, pos.totalDays))} of ${pos.totalDays}`} />
-      <ScrollView contentContainerStyle={ui.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown.duration(450)} style={styles.summary}>
           <LinearGradient colors={['#3A3633', '#221F1D']} style={[StyleSheet.absoluteFill, { borderRadius: 28 }]} />
           <View style={styles.sumCol}><Text style={styles.sumV}>{wc ? `${wc.changeKg > 0 ? '+' : ''}${wc.changeKg}` : '—'}</Text><Text style={styles.sumL}>kg</Text></View>

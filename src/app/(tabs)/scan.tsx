@@ -9,7 +9,7 @@ import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Icon } from '@/components/Icon';
 import { Sheet } from '@/components/Sheet';
-import { Banner, ChipSelect, Pill, Screen, Segmented, ShimmerBar, Stepper, ui } from '@/components/ui';
+import { Banner, ChipSelect, Pill, Screen, Segmented, ShimmerBar, Stepper, ui, useScrollBottomPad } from '@/components/ui';
 import { FoodItem, MealSlot } from '@/types/domain';
 import { ALL_FOODS, defaultServing, searchFoods } from '@/engine/foodMatcher';
 import { AiMealAnalysis, draftFromFood, MealDraftItem, mapAiMealToDraft, rescaleDraftItem, suggestSlot, sumNutrients } from '@/engine/mealAnalysis';
@@ -28,6 +28,7 @@ const STEPS = [
 ];
 
 export default function ScanScreen() {
+  const bottomPad = useScrollBottomPad();
   const s = useAppStore();
   const [mode, setMode] = useState<'meal' | 'report'>('meal');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -214,7 +215,7 @@ export default function ScanScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={ui.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]} keyboardShouldPersistTaps="handled">
         <Text style={[ui.h1, { marginTop: 12 }]}>AI Scanner</Text>
         <Text style={[ui.muted, { marginBottom: 12 }]}>Logging to {friendlyDayLabel(s.selectedDate)}</Text>
         <Segmented

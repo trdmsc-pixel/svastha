@@ -7,7 +7,7 @@ import { exportUserData, useAppStore } from '@/store/useAppStore';
 import { syncPlanToDeviceCalendar } from '@/lib/calendarSync';
 import { authenticate, getBiometricCapability } from '@/lib/biometric';
 import { aiTransportLabel } from '@/lib/ai';
-import { Screen, SectionTitle, SettingRow, Toggle } from '@/components/ui';
+import { Screen, SectionTitle, SettingRow, Toggle, useScrollBottomPad } from '@/components/ui';
 import { useProgrammeStore } from '@/store/useProgrammeStore';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
@@ -16,6 +16,7 @@ import { Icon } from '@/components/Icon';
 import { ageFromDob } from '@/lib/dates';
 
 export default function MeScreen() {
+  const bottomPad = useScrollBottomPad();
   const programmeId = useProgrammeStore((st) => st.programmeId);
   const programmeRemindersOn = useProgrammeStore((st) => st.remindersOn);
   const setProgrammeRemindersOn = useProgrammeStore((st) => st.setRemindersOn);
@@ -105,7 +106,7 @@ export default function MeScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.title} accessibilityRole="header">
           Me & Settings
         </Text>

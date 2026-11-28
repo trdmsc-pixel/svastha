@@ -93,12 +93,12 @@ const styles = StyleSheet.create({
   },
   blurClip: { borderRadius: tokens.radius.card, overflow: 'hidden' },
   glass: {
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.72)',
+    backgroundColor: Platform.OS === 'android' ? '#FFFDFB' : 'rgba(255,255,255,0.72)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.92)',
   },
   glowCard: {
-    backgroundColor: Platform.OS === 'android' ? 'rgba(255,250,245,0.95)' : 'rgba(255,249,243,0.78)',
+    backgroundColor: Platform.OS === 'android' ? '#FFF9F3' : 'rgba(255,249,243,0.78)',
     borderWidth: 1.5,
     borderColor: 'rgba(240,154,106,0.45)',
     shadowColor: '#E8774A',

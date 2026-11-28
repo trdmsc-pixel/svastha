@@ -10,7 +10,7 @@ import { MacroRow } from '@/components/MacroRow';
 import { FoodThumb } from '@/components/FoodThumb';
 import { Icon } from '@/components/Icon';
 import { Sheet, SheetOption } from '@/components/Sheet';
-import { GlowBar, IconButton, MiniRing, Pill, Screen, SectionTitle, ui } from '@/components/ui';
+import { GlowBar, IconButton, MiniRing, Pill, Screen, SectionTitle, ui, useScrollBottomPad } from '@/components/ui';
 import { buildSmartCoachTip } from '@/engine/smartCoach';
 import { useDailyTargets, useDayLog, useDayTotals, useInbox, useTasksFor } from '@/hooks/useHealthData';
 import { diffDays, formatTime12, friendlyDayLabel, fromDateKey, greetingFor, todayKey, WEEKDAYS_SHORT, weekOf } from '@/lib/dates';
@@ -21,6 +21,7 @@ import { menuFor, weightChange, workoutFor } from '@/engine/programmeEngine';
 import { NextUpCard, ProgrammeHero, QuickTiles, RoutineTimeline, WinToast } from '@/components/programme/ProgrammeUI';
 
 export default function TodayScreen() {
+  const bottomPad = useScrollBottomPad();
   const s = useAppStore();
   const date = s.selectedDate;
   const isToday = date === todayKey();
@@ -73,7 +74,7 @@ export default function TodayScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={ui.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <IconButton icon="calendar" label="Open calendar" onPress={() => router.push('/calendar')} />
           <View style={{ flex: 1, alignItems: 'center' }}>

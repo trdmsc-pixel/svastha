@@ -5,7 +5,7 @@ import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg';
 import { tokens } from '@/theme/tokens';
 import { Card } from '@/components/Card';
 import { Icon } from '@/components/Icon';
-import { Screen, ScreenHeader, SectionTitle, ui } from '@/components/ui';
+import { Screen, ScreenHeader, SectionTitle, ui, useScrollBottomPad } from '@/components/ui';
 import { RESET_8 } from '@/programme/reset8';
 import { Weekday } from '@/programme/types';
 import { getProgramme } from '@/hooks/useProgramme';
@@ -38,6 +38,7 @@ function Plate() {
 }
 
 export default function FoodScreen() {
+  const bottomPad = useScrollBottomPad();
   const id = useProgrammeStore((s) => s.programmeId);
   const p = getProgramme(id) ?? RESET_8;
   const [day, setDay] = useState<Weekday>(weekdayIndex(todayKey()) as Weekday);
@@ -48,7 +49,7 @@ export default function FoodScreen() {
   return (
     <Screen>
       <ScreenHeader title="Food plan" subtitle="Satvic · no onion, no garlic" />
-      <ScrollView contentContainerStyle={ui.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         <View style={styles.days}>
           {WEEKDAYS_SHORT.map((d, i) => {
             const on = i === day;

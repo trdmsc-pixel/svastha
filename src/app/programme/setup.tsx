@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
 import { Card } from '@/components/Card';
-import { Banner, Screen, ScreenHeader, Stepper, Toggle, ui } from '@/components/ui';
+import { Banner, Screen, ScreenHeader, Stepper, Toggle, ui, useScrollBottomPad } from '@/components/ui';
 import { RESET_8 } from '@/programme/reset8';
 import { useProgrammeStore } from '@/store/useProgrammeStore';
 import { addDays, friendlyDayLabel, todayKey, weekdayIndex } from '@/lib/dates';
@@ -13,6 +13,7 @@ import { requestNotificationPermission } from '@/lib/notifications';
 import { haptic } from '@/lib/haptics';
 
 export default function ProgrammeSetup() {
+  const bottomPad = useScrollBottomPad();
   const start = useProgrammeStore((s) => s.startProgramme);
   const setRemindersOn = useProgrammeStore((s) => s.setRemindersOn);
   const today = todayKey();
@@ -34,7 +35,7 @@ export default function ProgrammeSetup() {
   return (
     <Screen>
       <ScreenHeader title="8-Week Reset" subtitle="Set up in 30 seconds" />
-      <ScrollView contentContainerStyle={ui.scroll}>
+      <ScrollView contentContainerStyle={[ui.scroll, { paddingBottom: bottomPad }]}>
         <Animated.View entering={FadeInDown.duration(500)}>
           <Text style={styles.big}>Your day, planned.{'\n'}Your body, back.</Text>
           <Text style={[ui.muted, { fontSize: 15.5, lineHeight: 22, marginTop: 8 }]}>

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Pressable, StyleProp, StyleSheet, Text, TextInput, TextInputProps, TextStyle, View, ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import Svg, { Circle, Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import Animated, { Easing, interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { tokens } from '@/theme/tokens';
@@ -80,6 +81,22 @@ export function Screen({ children, style }: { children: React.ReactNode; style?:
       {children}
     </View>
   );
+}
+
+/** Gap between the floating tab bar and the screen's bottom safe edge. */
+export function tabBarBottomGap(insetBottom: number): number {
+  return Math.max(insetBottom, 14) + 6;
+}
+
+/**
+ * Bottom padding for scroll content so the last row always clears the floating tab bar
+ * (inside tabs) or the home indicator (stack screens). Measured from the real tab-bar height
+ * and safe-area inset instead of a fixed number, which hid rows on phones with a home bar.
+ */
+export function useScrollBottomPad(extra = 28): number {
+  const insets = useSafeAreaInsets();
+  const tabH = React.useContext(BottomTabBarHeightContext);
+  return tabH ? tabH + tabBarBottomGap(insets.bottom) + extra : insets.bottom + extra;
 }
 
 /* ───────────────────────── Header & buttons ───────────────────────── */

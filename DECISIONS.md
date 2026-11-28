@@ -29,3 +29,9 @@
 - **Medicine safety**: medicine items and reminders appear only after the user switches a medicine on in the Doctor screen (i.e. it was prescribed). The app never suggests a dose.
 - **Reminders**: when a programme is active it owns the daily rhythm; the generic water/meal/routine reminders are dropped to avoid duplicates, keeping the user's own medicine times and retest one-offs. `ScheduledReminder.weekday` adds weekly triggers (per-weekday workout copy, Sunday weigh-in, weekly Vitamin D). Total stays < 40 (iOS caps pending local notifications at 64).
 - **Storage**: `useProgrammeStore` is persisted per account (`svastha-programme-v1:<userId>`), switched/wiped/exported alongside the main app data (DPDP export + deletion).
+
+## 7. 8-Week Reset — native QA (Task 1)
+- Scroll content bottom padding is computed by `useScrollBottomPad()` from the real tab-bar height (`BottomTabBarHeightContext`) plus the safe-area inset, replacing a fixed 130 px that let the floating tab bar cover the last timeline rows on phones with a home indicator. The tab bar itself floats `tabBarBottomGap(insets.bottom)` above the bottom edge.
+- Emoji `Text` gets an explicit `lineHeight` + `includeFontPadding: false` and ignores font scaling (Android clips large emoji tops otherwise; layout boxes are sized for them).
+- SVG gradient ids use `React.useId()` so two halos on one web page can't share a gradient.
+- Android glass/glow cards use opaque surfaces: Android draws elevation shadows through translucent backgrounds as a grey halo. iOS keeps the real blur.

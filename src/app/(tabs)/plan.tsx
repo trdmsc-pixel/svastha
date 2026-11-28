@@ -11,7 +11,7 @@ import { callAi } from '@/lib/ai';
 import { getLocalOrCdnImage } from '@/lib/cdn';
 import { MealSlot, Recipe, RecipeFocus } from '@/types/domain';
 import { Icon, IconName } from '@/components/Icon';
-import { IconButton, Pill, Screen, ShimmerBar, Toggle, ui } from '@/components/ui';
+import { IconButton, Pill, Screen, ShimmerBar, Toggle, ui, useScrollBottomPad } from '@/components/ui';
 import { Card } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Sheet } from '@/components/Sheet';
@@ -40,6 +40,7 @@ const QUICK_CRAVINGS = [
 ];
 
 export default function PlanScreen() {
+  const bottomPad = useScrollBottomPad();
   const {
     activePlan,
     reports,
@@ -206,7 +207,7 @@ export default function PlanScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: bottomPad }]} showsVerticalScrollIndicator={false}>
         {/* Top Search + Notification Bell */}
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
