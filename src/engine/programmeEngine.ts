@@ -158,6 +158,47 @@ export function toExpoWeekday(wd: Weekday): number {
   return ((wd + 1) % 7) + 1;
 }
 
+/**
+ * Maps a scheduled reminder id back to its routine item: `prog-exercise-3` → `exercise`,
+ * `prog-vitd-6` → `vitd`, `prog-walk-lunch` → `walk-lunch`. Returns null for reminders that
+ * aren't routine items (e.g. the Sunday check-in or the user's own medicine times).
+ */
+export function reminderToItemId(p: Programme, reminderId: string): string | null {
+  if (!reminderId.startsWith('prog-')) return null;
+  const rest = reminderId.slice(5);
+  const ids = new Set(p.routine.map((r) => r.id));
+  if (ids.has(rest)) return rest;
+  const m = /^(.+)-([0-6])$/.exec(rest);
+  return m && ids.has(m[1]) ? m[1] : null;
+}
+
+export const NOTIFICATION_ACTIONS = { done: 'DONE', taken: 'TAKEN', snooze: 'SNOOZE_10', skip: 'SKIP' } as const;
+
+/**
+ * Decides which item (if any) a notification action should tick for `date`.
+ * Only "Done ✓" / "Taken" tick; only items that apply that day, are tracked, and aren't
+ * already ticked (so a repeated or replayed response can never un-tick anything).
+ */
+export function itemToTickFromAction(
+  p: Programme,
+  date: DateKey,
+  actionId: string,
+  reminderId: string,
+  checked: readonly string[] | undefined,
+  flags: Flags = {},
+  itemIdHint?: string | null
+): string | null {
+  if (actionId !== NOTIFICATION_ACTIONS.done && actionId !== NOTIFICATION_ACTIONS.taken) return null;
+  const itemId = itemIdHint && p.routine.some((r) => r.id === itemIdHint) ? itemIdHint : reminderToItemId(p, reminderId);
+  if (!itemId) return null;
+  const item = itemsForDate(p, date, flags).find((i) => i.id === itemId);
+  if (!item || !item.track) return null;
+  // "Taken" is only meaningful for medicines; "Done" for everything else.
+  if (actionId === NOTIFICATION_ACTIONS.taken && item.kind !== 'medicine') return null;
+  if ((checked ?? []).includes(itemId)) return null;
+  return itemId;
+}
+
 const WORKOUT_COPY: Record<WorkoutType, string> = {
   strength: 'Walk first, then 15 min strength: squats, wall push-ups, bridges.',
   yoga: 'Walk first, then 15 min yoga to finish calm.',
@@ -181,12 +222,12 @@ export function buildProgrammeReminders(p: Programme, flags: Flags = {}): Schedu
     const body = it.reminderBody ?? it.detail ?? it.title;
     if (it.id === 'exercise') {
       ([0, 1, 2, 3, 4, 5, 6] as Weekday[]).forEach((wd) =>
-        out.push({ id: `prog-exercise-${wd}`, category, title, body: WORKOUT_COPY[p.workoutByWeekday[wd]], time: it.time, weekday: toExpoWeekday(wd) })
+        out.push({ id: `prog-exercise-${wd}`, category, title, body: WORKOUT_COPY[p.workoutByWeekday[wd]], time: it.time, weekday: toExpoWeekday(wd), itemId: it.track ? it.id : undefined })
       );
     } else if (it.days) {
-      it.days.forEach((wd) => out.push({ id: `prog-${it.id}-${wd}`, category, title, body, time: it.time, weekday: toExpoWeekday(wd) }));
+      it.days.forEach((wd) => out.push({ id: `prog-${it.id}-${wd}`, category, title, body, time: it.time, weekday: toExpoWeekday(wd), itemId: it.track ? it.id : undefined }));
     } else {
-      out.push({ id: `prog-${it.id}`, category, title, body, time: it.time });
+      out.push({ id: `prog-${it.id}`, category, title, body, time: it.time, itemId: it.track ? it.id : undefined });
     }
   }
   out.push({ id: 'prog-weighin', category: 'routine', title: 'Sunday check 📏', body: 'Weigh in before tea, measure your waist, and see your week.', time: '08:15', weekday: toExpoWeekday(6) });

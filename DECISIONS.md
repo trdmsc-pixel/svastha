@@ -35,3 +35,8 @@
 - Emoji `Text` gets an explicit `lineHeight` + `includeFontPadding: false` and ignores font scaling (Android clips large emoji tops otherwise; layout boxes are sized for them).
 - SVG gradient ids use `React.useId()` so two halos on one web page can't share a gradient.
 - Android glass/glow cards use opaque surfaces: Android draws elevation shadows through translucent backgrounds as a grey halo. iOS keeps the real blur.
+
+## 8. Actionable notifications (Task 2)
+- Categories: `medicine_reminder` (Taken / Snooze 10 min / Skip) and `routine_done` (Done ✓), all with `opensAppToForeground: false`. Programme reminders carry `itemId` in `data`.
+- `NotificationActions` (in `_layout.tsx`, mounted after the user's data namespace loads) maps actions through the deterministic `itemToTickFromAction` engine helper: only Done/Taken tick, only items that apply today and are tracked, "Taken" only for medicine items, and **never** if already ticked (so replays are idempotent). Snooze re-sends the same content in 10 min.
+- Platform note: iOS delivers background action responses to JS when the app is resident; on a cold start the last response is replayed via `getLastNotificationResponseAsync()`. Android action responses while the app is killed are delivered on next launch (last one only) — a known expo-notifications limitation without a native background task.

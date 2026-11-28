@@ -15,14 +15,19 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import * as Notifications from 'expo-notifications';
 import { tokens } from '@/theme/tokens';
+import { itemToTickFromAction, NOTIFICATION_ACTIONS } from '@/engine/programmeEngine';
+import { selectFlags, useProgrammeStore } from '@/store/useProgrammeStore';
+import { getProgramme } from '@/hooks/useProgramme';
+import { todayKey } from '@/lib/dates';
 import { useAuthStore } from '@/store/useAuthStore';
 import { switchUserData, useAppStore } from '@/store/useAppStore';
 import { AppLock } from '@/components/AppLock';
 import { Icon } from '@/components/Icon';
 import { ScreenBackground } from '@/components/ui';
 import { useReminderSchedule } from '@/hooks/useHealthData';
-import { applyReminderSchedule, configureNotificationChannels } from '@/lib/notifications';
+import { applyReminderSchedule, configureNotificationChannels, snoozeNotification } from '@/lib/notifications';
 
 const queryClient = new QueryClient();
 
@@ -77,6 +82,44 @@ function ReminderSync() {
     }, 800);
     return () => clearTimeout(t);
   }, [schedule, sound, session]);
+  return null;
+}
+
+/**
+ * Handles notification action buttons. "Done ✓" (routine) and "Taken" (medicine) tick today's
+ * item without opening the app — only if it isn't ticked yet. "Snooze 10 min" re-sends in 10 min.
+ * Mounted only after the user's data namespace has loaded, so ticks land in the right account.
+ */
+const handledResponses = new Set<string>();
+function NotificationActions() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const handle = async (resp: Notifications.NotificationResponse | null) => {
+      if (!resp) return;
+      const key = `${resp.notification.request.identifier}:${resp.actionIdentifier}:${resp.notification.date}`;
+      if (handledResponses.has(key)) return;
+      handledResponses.add(key);
+      const action = resp.actionIdentifier;
+      const data = (resp.notification.request.content.data ?? {}) as { reminderId?: string; itemId?: string | null };
+      if (action === NOTIFICATION_ACTIONS.snooze) {
+        await snoozeNotification(resp.notification.request.content).catch(() => undefined);
+      } else if (action === NOTIFICATION_ACTIONS.done || action === NOTIFICATION_ACTIONS.taken) {
+        const st = useProgrammeStore.getState();
+        const p = getProgramme(st.programmeId);
+        const today = todayKey();
+        const itemId = p ? itemToTickFromAction(p, today, action, data.reminderId ?? '', st.checks[today], selectFlags(st), data.itemId) : null;
+        if (itemId) st.toggleCheck(today, itemId);
+      }
+      if (action !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        await Notifications.dismissNotificationAsync(resp.notification.request.identifier).catch(() => undefined);
+      }
+    };
+    Notifications.getLastNotificationResponseAsync().then(handle).catch(() => undefined);
+    const sub = Notifications.addNotificationResponseReceivedListener((r) => {
+      handle(r).catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, []);
   return null;
 }
 
@@ -151,6 +194,7 @@ export default function RootLayout() {
               </Stack>
               {!ready && <AnimatedLaunchOverlay />}
               {ready && <ReminderSync />}
+              {ready && <NotificationActions />}
               <AppLock />
             </View>
           </View>
