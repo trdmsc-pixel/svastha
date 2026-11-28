@@ -36,6 +36,10 @@ export async function configureNotificationChannels(): Promise<void> {
     { identifier: 'SNOOZE_10', buttonTitle: 'Snooze 10 min', options: { opensAppToForeground: false } },
     { identifier: 'SKIP', buttonTitle: 'Skip', options: { opensAppToForeground: false } },
   ]);
+  // Routine reminders: tick the item straight from the notification without opening the app.
+  await Notifications.setNotificationCategoryAsync('routine_done', [
+    { identifier: 'DONE', buttonTitle: 'Done ✓', options: { opensAppToForeground: false } },
+  ]);
 }
 
 export type PermissionState = 'granted' | 'denied' | 'undetermined' | 'unsupported';
@@ -77,8 +81,8 @@ export async function applyReminderSchedule(schedule: ScheduledReminder[], sound
       title: r.title,
       body: r.body,
       sound: sound ? 'default' : undefined,
-      data: { reminderId: r.id, category: r.category },
-      categoryIdentifier: r.category === 'medicines' ? 'medicine_reminder' : undefined,
+      data: { reminderId: r.id, category: r.category, itemId: r.itemId ?? null },
+      categoryIdentifier: r.category === 'medicines' ? 'medicine_reminder' : r.itemId ? 'routine_done' : undefined,
     };
     try {
       if (r.date) {
@@ -87,6 +91,11 @@ export async function applyReminderSchedule(schedule: ScheduledReminder[], sound
         await Notifications.scheduleNotificationAsync({
           content,
           trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId: r.category },
+        });
+      } else if (r.weekday) {
+        await Notifications.scheduleNotificationAsync({
+          content,
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY, weekday: r.weekday, hour: h, minute: m, channelId: r.category },
         });
       } else {
         await Notifications.scheduleNotificationAsync({
@@ -125,4 +134,19 @@ export async function cancelAllUserNotifications(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+/** Re-sends a notification's content in 10 minutes (the "Snooze 10 min" action). */
+export async function snoozeNotification(content: Notifications.NotificationContent, minutes = 10): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: content.title ?? 'Svastha',
+      body: content.body ?? '',
+      data: content.data,
+      categoryIdentifier: (content as { categoryIdentifier?: string | null }).categoryIdentifier ?? undefined,
+      sound: 'default',
+    },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: minutes * 60 },
+  });
 }

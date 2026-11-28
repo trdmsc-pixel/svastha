@@ -8,6 +8,9 @@ export interface ScheduledReminder {
   body: string;
   time: string; // HH:mm local, repeats daily unless `date` is set
   date?: string; // YYYY-MM-DD for one-off reminders (retest)
+  /** Routine item this reminder belongs to — lets a "Done ✓" action tick it. */
+  itemId?: string;
+  weekday?: number; // repeats weekly on this day instead of daily (Expo: 1 = Sunday … 7 = Saturday)
 }
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {

@@ -26,6 +26,7 @@ import { DEFAULT_NOTIFICATION_PREFS } from '@/engine/reminderSchedule';
 import { sumNutrients } from '@/engine/mealAnalysis';
 import { addDays, DateKey, isoAt, todayKey } from '@/lib/dates';
 import { persistStorage, readRaw, removeKey } from '@/lib/storage';
+import { exportProgrammeData, switchProgrammeUser, wipeProgrammeUser } from './useProgrammeStore';
 import { fetchCloudFoods, saveCloudAiRecipes, upsertCloudFood } from '@/lib/cloudCatalog';
 
 export interface DayLog {
@@ -429,6 +430,7 @@ const dataKey = (userId: string) => `svastha-data-${userId}`;
  */
 export async function switchUserData(userId: string | null, opts: { seedDemo?: boolean } = {}): Promise<void> {
   const id = userId ?? 'anon';
+  await switchProgrammeUser(id);
   const key = dataKey(id);
   const raw = await readRaw(key);
   useAppStore.persist.setOptions({ name: key });
@@ -443,6 +445,7 @@ export async function switchUserData(userId: string | null, opts: { seedDemo?: b
 
 export async function wipeUserData(userId: string): Promise<void> {
   await removeKey(dataKey(userId));
+  await wipeProgrammeUser(userId);
   useAppStore.persist.setOptions({ name: dataKey('anon') });
   useAppStore.setState({ ...initialData('anon'), selectedDate: todayKey() });
 }
@@ -463,6 +466,7 @@ export function exportUserData(): Record<string, unknown> {
     active_plan: s.activePlan,
     tasks: s.tasks,
     daily_logs: s.days,
+    programme: exportProgrammeData(),
   };
 }
 

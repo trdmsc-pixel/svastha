@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,14 +15,20 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import * as Notifications from 'expo-notifications';
 import { tokens } from '@/theme/tokens';
+import { itemToTickFromAction, NOTIFICATION_ACTIONS } from '@/engine/programmeEngine';
+import { selectFlags, useProgrammeStore } from '@/store/useProgrammeStore';
+import { getProgramme } from '@/hooks/useProgramme';
+import { todayKey } from '@/lib/dates';
+import { autofillTodaySteps, stepsAutofillEnabled } from '@/lib/stepsSource';
 import { useAuthStore } from '@/store/useAuthStore';
 import { switchUserData, useAppStore } from '@/store/useAppStore';
 import { AppLock } from '@/components/AppLock';
 import { Icon } from '@/components/Icon';
 import { ScreenBackground } from '@/components/ui';
 import { useReminderSchedule } from '@/hooks/useHealthData';
-import { applyReminderSchedule, configureNotificationChannels } from '@/lib/notifications';
+import { applyReminderSchedule, configureNotificationChannels, snoozeNotification } from '@/lib/notifications';
 
 const queryClient = new QueryClient();
 
@@ -72,11 +78,71 @@ function ReminderSync() {
   const session = useAuthStore((s) => s.session);
   useEffect(() => {
     if (!session || Platform.OS === 'web') return;
+    // Debounced: ticking several items in a row (which refreshes the Sunday recap and the
+    // comeback nudge) reschedules once, not once per tap.
     const t = setTimeout(() => {
       applyReminderSchedule(schedule, sound).catch(() => undefined);
-    }, 800);
+    }, 2000);
     return () => clearTimeout(t);
   }, [schedule, sound, session]);
+  return null;
+}
+
+/**
+ * Handles notification action buttons. "Done ✓" (routine) and "Taken" (medicine) tick today's
+ * item without opening the app — only if it isn't ticked yet. "Snooze 10 min" re-sends in 10 min.
+ * Mounted only after the user's data namespace has loaded, so ticks land in the right account.
+ */
+const handledResponses = new Set<string>();
+function NotificationActions() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const handle = async (resp: Notifications.NotificationResponse | null) => {
+      if (!resp) return;
+      const key = `${resp.notification.request.identifier}:${resp.actionIdentifier}:${resp.notification.date}`;
+      if (handledResponses.has(key)) return;
+      handledResponses.add(key);
+      const action = resp.actionIdentifier;
+      const data = (resp.notification.request.content.data ?? {}) as { reminderId?: string; itemId?: string | null };
+      if (action === NOTIFICATION_ACTIONS.snooze) {
+        await snoozeNotification(resp.notification.request.content).catch(() => undefined);
+      } else if (action === NOTIFICATION_ACTIONS.done || action === NOTIFICATION_ACTIONS.taken) {
+        const st = useProgrammeStore.getState();
+        const p = getProgramme(st.programmeId);
+        const today = todayKey();
+        const itemId = p ? itemToTickFromAction(p, today, action, data.reminderId ?? '', st.checks[today], selectFlags(st), data.itemId) : null;
+        if (itemId) st.toggleCheck(today, itemId);
+      }
+      if (action !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        await Notifications.dismissNotificationAsync(resp.notification.request.identifier).catch(() => undefined);
+      }
+    };
+    Notifications.getLastNotificationResponseAsync().then(handle).catch(() => undefined);
+    const sub = Notifications.addNotificationResponseReceivedListener((r) => {
+      handle(r).catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, []);
+  return null;
+}
+
+/** Fills today's steps from HealthKit / Health Connect on app focus (feature-flagged; manual fallback). */
+function StepsAutofill() {
+  useEffect(() => {
+    if (Platform.OS === 'web' || !stepsAutofillEnabled()) return;
+    const run = async () => {
+      const st = useProgrammeStore.getState();
+      if (!st.programmeId) return;
+      const today = todayKey();
+      const next = await autofillTodaySteps(st.steps[today]);
+      if (next !== null) useProgrammeStore.getState().setSteps(today, next);
+    };
+    run().catch(() => undefined);
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') run().catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, []);
   return null;
 }
 
@@ -143,9 +209,17 @@ export default function RootLayout() {
                 <Stack.Screen name="notifications" />
                 <Stack.Screen name="routine" />
                 <Stack.Screen name="report/chat" />
+                <Stack.Screen name="programme/setup" options={{ animation: 'fade_from_bottom' }} />
+                <Stack.Screen name="programme/food" />
+                <Stack.Screen name="programme/move" />
+                <Stack.Screen name="programme/progress" />
+                <Stack.Screen name="programme/doctor" />
+                <Stack.Screen name="programme/times" />
               </Stack>
               {!ready && <AnimatedLaunchOverlay />}
               {ready && <ReminderSync />}
+              {ready && <NotificationActions />}
+              {ready && <StepsAutofill />}
               <AppLock />
             </View>
           </View>
